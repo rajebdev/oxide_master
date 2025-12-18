@@ -34,52 +34,49 @@ struct AppDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                appHeader
+        ZStack(alignment: .topTrailing) {
+            // Scrollable Content
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    appHeader
 
-                Divider()
-
-                // Size Breakdown
-                sizeBreakdown
-
-                Divider()
-
-                // Related Files
-                if !app.relatedFiles.isEmpty {
-                    relatedFilesSection
                     Divider()
-                }
 
-                // Login Items
-                if !app.loginItems.isEmpty {
-                    loginItemsSection
+                    // Size Breakdown
+                    sizeBreakdown
+
                     Divider()
-                }
 
-                // Uninstall Options
-                uninstallSection
-            }
-            .padding()
-            .padding(.top, 40)  // Space for sticky close button
-        }
-        .safeAreaInset(edge: .top) {
-            // Sticky close button
-            HStack {
-                Spacer()
-                Button {
-                    onClose()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.secondary)
+                    // Related Files
+                    if !app.relatedFiles.isEmpty {
+                        relatedFilesSection
+                        Divider()
+                    }
+
+                    // Login Items
+                    if !app.loginItems.isEmpty {
+                        loginItemsSection
+                        Divider()
+                    }
+
+                    // Uninstall Options
+                    uninstallSection
                 }
-                .buttonStyle(.plain)
-                .padding(12)
+                .padding()
             }
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
-            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+
+            // Floating close button
+            Button {
+                onClose()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.secondary)
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+            }
+            .buttonStyle(.plain)
+            .padding(16)
         }
         .navigationTitle(app.name)
         .alert("Confirm Uninstall", isPresented: $showingUninstallConfirm) {

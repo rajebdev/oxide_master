@@ -7,43 +7,46 @@ struct AppUninstallerView: View {
     @State private var showingOrphaned = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left Panel - App List
-            VStack(spacing: 0) {
-                // Header Stats
-                statsHeader
+        VStack(spacing: 0) {
+            // Header Stats - Full Width
+            statsHeader
 
-                Divider()
+            Divider()
 
-                // Controls
-                controlsBar
+            // Controls - Full Width
+            controlsBar
 
-                Divider()
+            Divider()
 
-                // App List
-                if viewModel.isScanning {
-                    scanningView
-                } else {
-                    appListView
-                }
-            }
-            .frame(
-                minWidth: selectedApp == nil ? nil : 400,
-                maxWidth: selectedApp == nil ? .infinity : 500)
-
-            if let app = selectedApp {
-                Divider()
-
-                // Right Panel - Detail
-                AppDetailView(
-                    app: app,
-                    onClose: {
-                        selectedApp = nil
+            // Main Content - App List and Detail Side by Side
+            HStack(spacing: 0) {
+                // Left Panel - App List
+                VStack(spacing: 0) {
+                    // App List
+                    if viewModel.isScanning {
+                        scanningView
+                    } else {
+                        appListView
                     }
-                ) { action in
-                    handleAppAction(app, action: action)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(
+                    minWidth: selectedApp == nil ? nil : 400,
+                    maxWidth: selectedApp == nil ? .infinity : 500)
+
+                if let app = selectedApp {
+                    Divider()
+
+                    // Right Panel - Detail
+                    AppDetailView(
+                        app: app,
+                        onClose: {
+                            selectedApp = nil
+                        }
+                    ) { action in
+                        handleAppAction(app, action: action)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .sheet(isPresented: $showingOrphaned) {

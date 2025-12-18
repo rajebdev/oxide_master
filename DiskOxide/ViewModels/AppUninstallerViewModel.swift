@@ -10,7 +10,7 @@ class AppUninstallerViewModel: ObservableObject {
     @Published var scanProgress = ""
     @Published var searchText = ""
     @Published var sortOption: SortOption = .name
-    @Published var sourceFilters: Set<AppInfo.AppSource> = Set(AppInfo.AppSource.allCases)
+    @Published var sourceFilters: Set<AppInfo.AppSource> = [.user, .appStore]
     @Published var selectedCategory: FilterCategory = .all
     @Published var errorMessage: String?
     @Published var showError = false
