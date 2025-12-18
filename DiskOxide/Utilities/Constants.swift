@@ -10,31 +10,31 @@ import SwiftUI
 
 /// App-wide constants
 enum Constants {
-    
+
     // MARK: - App Info
-    
+
     static let appName = "Disk Oxide"
     static let appVersion = "1.0.0"
     static let appIdentifier = "com.rajebdev.DiskOxide"
-    
+
     // MARK: - Default Paths
-    
+
     static var defaultScanPath: String {
         FileManager.default.homeDirectoryForCurrentUser.path
     }
-    
+
     static var cachePaths: [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return [
             "\(home)/Library/Caches",
             "\(home)/Library/Application Support",
             "/Library/Caches",
-            "/System/Library/Caches"
+            "/System/Library/Caches",
         ]
     }
-    
+
     // MARK: - Common Cache Folder Names
-    
+
     static let commonCacheFolders = [
         "Cache",
         "Caches",
@@ -48,18 +48,18 @@ enum Constants {
         "Cache Storage",
         "CacheStorage",
         "blob_storage",
-        "Service Worker"
+        "Service Worker",
     ]
-    
+
     // MARK: - File Size Constants
-    
+
     static let kilobyte: Int64 = 1024
     static let megabyte: Int64 = 1024 * 1024
     static let gigabyte: Int64 = 1024 * 1024 * 1024
     static let terabyte: Int64 = 1024 * 1024 * 1024 * 1024
-    
+
     // MARK: - UI Constants
-    
+
     enum UI {
         static let cornerRadius: CGFloat = 8
         static let padding: CGFloat = 16
@@ -74,9 +74,9 @@ enum Constants {
         static let sidebarWidth: CGFloat = 200
         static let toolbarHeight: CGFloat = 44
     }
-    
+
     // MARK: - Colors
-    
+
     enum Colors {
         // File type colors
         static let imageColor = Color(hex: "#FF6B6B")
@@ -88,33 +88,33 @@ enum Constants {
         static let executableColor = Color(hex: "#FFFFD2")
         static let folderColor = Color(hex: "#A8D8EA")
         static let otherColor = Color(hex: "#D3D3D3")
-        
+
         // Status colors
         static let successColor = Color.green
         static let errorColor = Color.red
         static let warningColor = Color.orange
         static let infoColor = Color.blue
-        
+
         // UI colors
         static let primaryColor = Color.blue
         static let secondaryColor = Color.gray
         static let backgroundColor = Color(NSColor.windowBackgroundColor)
         static let cardBackgroundColor = Color(NSColor.controlBackgroundColor)
     }
-    
+
     // MARK: - Defaults
-    
+
     enum Defaults {
         static let defaultBackupAgeDays = 7
-        static let defaultCacheAgeHours = 168 // 7 days
+        static let defaultCacheAgeHours = 168  // 7 days
         static let defaultCleanupIntervalHours = 24
         static let maxHistoryRecords = 100
         static let maxCleanupRecords = 1000
         static let scanBatchSize = 100
     }
-    
+
     // MARK: - SF Symbols
-    
+
     enum Icons {
         static let folder = "folder.fill"
         static let file = "doc"
@@ -125,36 +125,36 @@ enum Constants {
         static let code = "chevron.left.forwardslash.chevron.right"
         static let archive = "archivebox.fill"
         static let executable = "app.fill"
-        
+
         static let trash = "trash"
         static let copy = "doc.on.doc"
         static let move = "arrow.right.doc.on.clipboard"
         static let rename = "pencil"
         static let reveal = "eye"
-        
+
         static let disk = "externaldrive.fill"
         static let backup = "clock.arrow.circlepath"
         static let sync = "arrow.triangle.2.circlepath"
-        static let cache = "trash.circle"
-        
+        static let cache = "tray.fill"
+
         static let play = "play.fill"
         static let pause = "pause.fill"
         static let stop = "stop.fill"
         static let refresh = "arrow.clockwise"
-        
+
         static let settings = "gearshape"
         static let info = "info.circle"
         static let warning = "exclamationmark.triangle"
         static let error = "xmark.circle"
         static let success = "checkmark.circle"
-        
+
         static let list = "list.bullet"
         static let grid = "square.grid.2x2"
         static let chart = "chart.bar.fill"
     }
-    
+
     // MARK: - Keyboard Shortcuts
-    
+
     enum KeyboardShortcuts {
         static let copy = "c"
         static let paste = "v"
@@ -164,17 +164,17 @@ enum Constants {
         static let newFolder = "n"
         static let reveal = "⌘R"
     }
-    
+
     // MARK: - Notification Names
-    
+
     enum Notifications {
         static let cacheCleanupComplete = "CacheCleanupComplete"
         static let backupComplete = "BackupComplete"
         static let fileOperationComplete = "FileOperationComplete"
     }
-    
+
     // MARK: - UserDefaults Keys
-    
+
     enum UserDefaultsKeys {
         static let backupConfig = "backupConfig"
         static let cacheSettings = "cacheSettings"

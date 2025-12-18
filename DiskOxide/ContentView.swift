@@ -15,6 +15,8 @@ struct ContentView: View {
         case backup
         case fileSync
         case cache
+        case uninstaller
+        case about
     }
 
     var body: some View {
@@ -42,6 +44,10 @@ struct ContentView: View {
                         FileSyncView()
                     case .cache:
                         CacheManagerView()
+                    case .uninstaller:
+                        AppUninstallerView()
+                    case .about:
+                        AboutView()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -64,7 +70,7 @@ struct HeaderView: View {
                     .font(.title)
                     .fontWeight(.bold)
 
-                Text("Disk Analyzer • Backup Manager • File Sync • Cache Cleaner")
+                Text("Disk Analyzer • Backup Manager • File Sync • Cache Cleaner • App Uninstaller")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -115,9 +121,27 @@ struct SidebarView: View {
                 selectedTab = .cache
             }
 
+            SidebarButton(
+                title: "App Uninstaller",
+                icon: "xmark.app.fill",
+                isSelected: selectedTab == .uninstaller
+            ) {
+                selectedTab = .uninstaller
+            }
+
             Spacer()
+
+            Divider()
+
+            SidebarButton(
+                title: "About",
+                icon: "info.circle",
+                isSelected: selectedTab == .about
+            ) {
+                selectedTab = .about
+            }
         }
-        .frame(width: 180)
+        .frame(width: 220)
         .background(Constants.Colors.backgroundColor)
     }
 }
