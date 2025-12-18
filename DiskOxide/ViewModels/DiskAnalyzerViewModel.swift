@@ -21,6 +21,8 @@ class DiskAnalyzerViewModel: ObservableObject {
     @Published var sortOrder: SortOrder = .name
     @Published var viewMode: ViewMode = .tree
     @Published var selectedFiles: Set<String> = []
+    @Published var calculatedItemsCount: Int = 0
+    @Published var totalItemsCount: Int = 0
 
     private let fileScanner = FileScanner.self
     private let fileOps = FileOperationsService()
@@ -33,7 +35,7 @@ class DiskAnalyzerViewModel: ObservableObject {
         case list, tree, treeMap
     }
 
-    /// Scan directory
+    /// Scan directory with progressive loading
     func scanDirectory(path: String) async {
         guard !isScanning else { return }
 
@@ -41,24 +43,141 @@ class DiskAnalyzerViewModel: ObservableObject {
         errorMessage = nil
         currentPath = path
         scanProgress = 0.0
+        calculatedItemsCount = 0
+        scanMessage = "Loading structure..."
 
         do {
-            let info = try await fileScanner.scanWithProgress(at: path) {
-                [weak self] progress, message in
-                Task { @MainActor in
-                    self?.scanProgress = progress
-                    self?.scanMessage = message
-                }
-            }
+            // Phase 1: Quick structure scan (INSTANT)
+            let info = try await fileScanner.quickStructureScan(at: path)
 
             rootFileInfo = info
             displayedFiles = info.children
+            totalItemsCount = countAllItems(in: info)
             sortFiles()
+
+            scanMessage = "Structure loaded. Calculating sizes concurrently..."
+
+            // Phase 2: Progressive CONCURRENT size calculation (much faster!)
+            try await fileScanner.progressiveSizeCalculation(root: info) {
+                [weak self] updatedFile in
+                Task { @MainActor in
+                    guard let self = self else { return }
+
+                    // Update the file info in the tree
+                    if var root = self.rootFileInfo {
+                        self.updateFileInfoInTree(&root, with: updatedFile)
+                        // Re-sort tree after size update
+                        self.sortTreeRecursive(&root)
+                        self.rootFileInfo = root
+
+                        // Update displayed files if needed
+                        if self.currentPath == path {
+                            self.displayedFiles = root.children
+                            self.sortFiles()
+                        }
+                    }
+
+                    // Update progress
+                    if updatedFile.sizeStatus == .calculated {
+                        self.calculatedItemsCount += 1
+                        self.scanProgress =
+                            Double(self.calculatedItemsCount) / Double(max(self.totalItemsCount, 1))
+                        self.scanMessage =
+                            "Calculated \\(self.calculatedItemsCount)/\\(self.totalItemsCount) items (concurrent)"
+                    }
+                }
+            }
+
+            scanMessage = "Scan complete!"
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isScanning = false
+    }
+
+    /// Count all items in tree (for progress tracking)
+    private func countAllItems(in file: FileInfo) -> Int {
+        var count = 1
+        for child in file.children {
+            count += countAllItems(in: child)
+        }
+        return count
+    }
+
+    /// Update file info in tree structure
+    private func updateFileInfoInTree(_ current: inout FileInfo, with updated: FileInfo) {
+        if current.path == updated.path {
+            // Update size and status
+            current.size = updated.size
+            current.sizeStatus = updated.sizeStatus
+        } else {
+            // Recursively search in children
+            for i in 0..<current.children.count {
+                updateFileInfoInTree(&current.children[i], with: updated)
+            }
+        }
+    }
+
+    /// Lazy load children when folder is expanded
+    func loadChildren(for file: FileInfo) async {
+        guard file.isDirectory else { return }
+        guard file.children.isEmpty else { return }  // Already loaded
+
+        do {
+            // Quick scan just this folder's immediate children
+            let info = try await fileScanner.quickStructureScan(at: file.path)
+
+            // Update the file info with children in the tree
+            if var updatedRoot = rootFileInfo {
+                updateChildrenInTree(&updatedRoot, for: file.path, children: info.children)
+                rootFileInfo = updatedRoot
+
+                // Update displayed files if we're viewing this directory
+                if currentPath == file.path {
+                    displayedFiles = info.children
+                    sortFiles()
+                }
+
+                // Start calculating sizes for new children CONCURRENTLY
+                // Use batchConcurrentCalculation to calculate all children at once
+                await fileScanner.batchConcurrentCalculation(
+                    files: info.children, maxConcurrency: 20
+                ) {
+                    [weak self] updatedFile in
+                    Task { @MainActor in
+                        guard let self = self else { return }
+                        if var root = self.rootFileInfo {
+                            self.updateFileInfoInTree(&root, with: updatedFile)
+                            // Re-sort tree after each size calculation
+                            self.sortTreeRecursive(&root)
+                            self.rootFileInfo = root
+
+                            // Update displayed files if needed
+                            if self.currentPath == file.path {
+                                self.displayedFiles = root.children
+                                self.sortFiles()
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Update children for a specific path in tree
+    private func updateChildrenInTree(
+        _ current: inout FileInfo, for path: String, children: [FileInfo]
+    ) {
+        if current.path == path {
+            current.children = children
+        } else {
+            for i in 0..<current.children.count {
+                updateChildrenInTree(&current.children[i], for: path, children: children)
+            }
+        }
     }
 
     /// Scan children of a directory
@@ -147,6 +266,17 @@ class DiskAnalyzerViewModel: ObservableObject {
             displayedFiles.sort { $0.totalSize > $1.totalSize }
         case .date:
             displayedFiles.sort { $0.modifiedDate > $1.modifiedDate }
+        }
+    }
+
+    /// Recursively sort all children in tree by size (largest first)
+    private func sortTreeRecursive(_ file: inout FileInfo) {
+        // Sort children by size descending
+        file.children.sort { $0.totalSize > $1.totalSize }
+
+        // Recursively sort grandchildren
+        for i in 0..<file.children.count {
+            sortTreeRecursive(&file.children[i])
         }
     }
 

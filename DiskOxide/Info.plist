@@ -50,6 +50,12 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     
+    <!-- App Icon -->
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+    
     <!-- High Resolution Support -->
     <key>NSHighResolutionCapable</key>
     <true/>

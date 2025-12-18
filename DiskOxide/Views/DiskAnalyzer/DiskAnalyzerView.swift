@@ -23,7 +23,8 @@ struct DiskAnalyzerView: View {
             Divider()
 
             // Content
-            if viewModel.isScanning {
+            if viewModel.isScanning && viewModel.rootFileInfo == nil {
+                // Initial scan - show progress
                 VStack {
                     Spacer()
                     ProgressView(value: viewModel.scanProgress) {
@@ -196,7 +197,20 @@ struct StatusBarView: View {
                 .frame(height: 16)
             Text("Total: \(viewModel.formattedTotalSize)")
             Spacer()
-            if !viewModel.scanMessage.isEmpty {
+
+            // Show progress when calculating sizes
+            if viewModel.isScanning && viewModel.totalItemsCount > 0 {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 12, height: 12)
+                    Text(
+                        "\(viewModel.calculatedItemsCount)/\(viewModel.totalItemsCount) calculated"
+                    )
+                    .foregroundColor(.orange)
+                    .font(.system(size: 12))
+                }
+            } else if !viewModel.scanMessage.isEmpty {
                 Text(viewModel.scanMessage)
                     .foregroundColor(.secondary)
             }

@@ -17,7 +17,10 @@ let package = Package(
         .executableTarget(
             name: "DiskOxide",
             path: "DiskOxide",
-            exclude: ["Info.plist"]
+            exclude: ["Info.plist"],
+            resources: [
+                .process("Assets.xcassets")
+            ]
         )
     ]
 )

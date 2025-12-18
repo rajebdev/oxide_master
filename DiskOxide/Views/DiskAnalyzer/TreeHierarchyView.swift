@@ -155,11 +155,19 @@ struct TreeNodeView: View {
                     }
                 }
 
-                // Size
-                Text(file.formattedSize)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 80, alignment: .trailing)
+                // Size with loading indicator
+                HStack(spacing: 4) {
+                    if file.isLoadingSize {
+                        Text("calculating...")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.orange)
+                    } else {
+                        Text(file.formattedSize)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(width: 100, alignment: .trailing)
 
                 // Permissions
                 Text(file.permissions)
@@ -245,6 +253,13 @@ struct TreeNodeView: View {
                 expandedPaths.remove(file.path)
             } else {
                 expandedPaths.insert(file.path)
+
+                // Lazy load children if directory is being expanded
+                if file.isDirectory && file.children.isEmpty {
+                    Task {
+                        await viewModel.loadChildren(for: file)
+                    }
+                }
             }
         }
     }

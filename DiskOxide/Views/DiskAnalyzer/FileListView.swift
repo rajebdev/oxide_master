@@ -120,10 +120,22 @@ struct FileRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Size
-            Text(file.formattedSize)
-                .foregroundColor(.secondary)
-                .frame(width: 120, alignment: .trailing)
+            // Size with loading indicator
+            HStack(spacing: 4) {
+                if file.isLoadingSize {
+                    if file.sizeStatus == .calculating {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 12, height: 12)
+                    }
+                    Text("calculating...")
+                        .foregroundColor(.orange)
+                } else {
+                    Text(file.formattedSize)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(width: 150, alignment: .trailing)
 
             // Modified date
             Text(file.modifiedDate.shortDateString())

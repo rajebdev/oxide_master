@@ -8,12 +8,19 @@
 import Foundation
 import SwiftUI
 
+/// Status of size calculation for progressive loading
+enum SizeStatus: Codable, Hashable {
+    case notCalculated
+    case calculating
+    case calculated
+}
+
 /// Represents a file or directory with its metadata
 struct FileInfo: Identifiable, Codable, Hashable {
     let id: UUID
     let name: String
     let path: String
-    let size: Int64
+    var size: Int64  // Changed to var for progressive updates
     let modifiedDate: Date
     let isDirectory: Bool
     var children: [FileInfo]
@@ -21,6 +28,7 @@ struct FileInfo: Identifiable, Codable, Hashable {
     let permissions: String
     let isHidden: Bool
     let isReadOnly: Bool
+    var sizeStatus: SizeStatus
 
     init(
         id: UUID = UUID(),
@@ -33,7 +41,8 @@ struct FileInfo: Identifiable, Codable, Hashable {
         fileType: FileType = .other,
         permissions: String = "---------",
         isHidden: Bool = false,
-        isReadOnly: Bool = false
+        isReadOnly: Bool = false,
+        sizeStatus: SizeStatus = .calculated
     ) {
         self.id = id
         self.name = name
@@ -46,6 +55,7 @@ struct FileInfo: Identifiable, Codable, Hashable {
         self.permissions = permissions
         self.isHidden = isHidden
         self.isReadOnly = isReadOnly
+        self.sizeStatus = sizeStatus
     }
 
     /// Create FileInfo from a file URL
@@ -111,17 +121,31 @@ struct FileInfo: Identifiable, Codable, Hashable {
             fileType: fileType,
             permissions: permissions,
             isHidden: isHidden,
-            isReadOnly: isReadOnly
+            isReadOnly: isReadOnly,
+            sizeStatus: .calculated
         )
     }
 
     /// Calculate total size including all children
     var totalSize: Int64 {
+        if sizeStatus == .notCalculated {
+            return 0
+        }
         if isDirectory {
-            // Directory size should just be sum of children, not size + children
+            // For directories: use calculated size from du command
+            // This is more accurate and works with lazy-loaded children
+            if size > 0 {
+                return size
+            }
+            // Fallback to sum of children if size not calculated yet
             return children.reduce(0) { $0 + $1.totalSize }
         }
         return size
+    }
+
+    /// Check if size is being calculated or not calculated yet
+    var isLoadingSize: Bool {
+        sizeStatus == .calculating || sizeStatus == .notCalculated
     }
 
     /// Calculate total file count including all children

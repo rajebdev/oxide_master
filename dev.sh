@@ -38,6 +38,11 @@ case "$CMD" in
             cp .build/release/DiskOxide DiskOxide.app/Contents/MacOS/
             cp DiskOxide/Info.plist DiskOxide.app/Contents/
             
+            # Create and copy icon
+            if [ -f "create_icns.sh" ]; then
+                bash create_icns.sh > /dev/null 2>&1
+            fi
+            
             # Sign
             echo "🔏 Signing app..."
             codesign --force --deep --sign - DiskOxide.app 2>/dev/null
