@@ -39,8 +39,9 @@ case "$CMD" in
             cp DiskOxide/Info.plist DiskOxide.app/Contents/
             
             # Create and copy icon
+            echo "🎨 Creating app icon..."
             if [ -f "create_icns.sh" ]; then
-                bash create_icns.sh > /dev/null 2>&1
+                bash create_icns.sh
             fi
             
             # Sign

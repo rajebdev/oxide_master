@@ -102,7 +102,7 @@ struct DiskAnalyzerToolbar: View {
     private var viewModeIcon: String {
         switch viewModel.viewMode {
         case .list: return "list.bullet"
-        case .tree: return "list.tree"
+        case .tree: return "list.bullet.indent"
         case .treeMap: return "chart.bar.xaxis"
         }
     }
@@ -139,7 +139,7 @@ struct DiskAnalyzerToolbar: View {
                     Label("List View", systemImage: "list.bullet")
                 }
                 Button(action: { viewModel.viewMode = .tree }) {
-                    Label("Tree View", systemImage: "list.tree")
+                    Label("Tree View", systemImage: "list.bullet.indent")
                 }
                 Button(action: { viewModel.viewMode = .treeMap }) {
                     Label("TreeMap", systemImage: "chart.bar.xaxis")
