@@ -9,6 +9,29 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Panel identifier for drag and drop
+enum Panel {
+    case left
+    case right
+}
+
+/// Sort option for file list
+enum SortOption {
+    case name
+    case size
+    case dateModified
+}
+
+/// Sort order
+enum SortOrder {
+    case ascending
+    case descending
+
+    mutating func toggle() {
+        self = self == .ascending ? .descending : .ascending
+    }
+}
+
 /// ViewModel for File Synchronization
 @MainActor
 class FileSyncViewModel: ObservableObject {
@@ -26,10 +49,17 @@ class FileSyncViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var sessions: [SyncSession] = []
     @Published var currentSession: SyncSession?
+    @Published var leftSortOption: SortOption = .name
+    @Published var leftSortOrder: SortOrder = .ascending
+    @Published var rightSortOption: SortOption = .name
+    @Published var rightSortOrder: SortOrder = .ascending
 
     private let fileOps = FileOperationsService()
-    private let userDefaults = UserDefaults.standard
-    private let sessionsKey = "syncSessions"
+    private let sessionManager = SyncSessionManager.shared
+    @Published var showSetup = true
+    @Published var showConflictAlert = false
+    @Published var pendingConflict: MoveConflict?
+    @Published var pendingOperation: (() async -> Void)?
 
     init() {
         loadSessions()
@@ -51,6 +81,7 @@ class FileSyncViewModel: ObservableObject {
 
         do {
             leftPanelFiles = try await fileOps.listDirectory(at: leftPanelPath)
+            leftPanelFiles = sortFiles(leftPanelFiles, by: leftSortOption, order: leftSortOrder)
         } catch {
             errorMessage = error.localizedDescription
             leftPanelFiles = []
@@ -70,6 +101,7 @@ class FileSyncViewModel: ObservableObject {
 
         do {
             rightPanelFiles = try await fileOps.listDirectory(at: rightPanelPath)
+            rightPanelFiles = sortFiles(rightPanelFiles, by: rightSortOption, order: rightSortOrder)
         } catch {
             errorMessage = error.localizedDescription
             rightPanelFiles = []
@@ -88,82 +120,210 @@ class FileSyncViewModel: ObservableObject {
         await loadRightPanel(path: path)
     }
 
-    /// Copy from left to right
+    /// Navigate both panels to the same subfolder (synchronized navigation)
+    func navigateToBothPanels(subfolder: String) async {
+        // Append subfolder name to both paths
+        leftPanelPath =
+            URL(fileURLWithPath: leftPanelPath)
+            .appendingPathComponent(subfolder).path
+        rightPanelPath =
+            URL(fileURLWithPath: rightPanelPath)
+            .appendingPathComponent(subfolder).path
+
+        // Auto-sync missing folders FIRST before loading
+        _ = try? await fileOps.syncCreateMissingFolders(
+            source: leftPanelPath,
+            destination: rightPanelPath
+        )
+
+        // Then load both panels
+        await loadLeftPanel()
+        await loadRightPanel()
+    }
+
+    /// Navigate both panels to parent directory (synchronized)
+    func navigateToParentBoth() async {
+        let leftParent = URL(fileURLWithPath: leftPanelPath).deletingLastPathComponent().path
+        let rightParent = URL(fileURLWithPath: rightPanelPath).deletingLastPathComponent().path
+
+        leftPanelPath = leftParent
+        rightPanelPath = rightParent
+
+        await loadLeftPanel()
+        await loadRightPanel()
+    }
+
+    /// Copy from left to right with conflict detection
     func copyLeftToRight() async {
         let sources = Array(leftSelectedFiles)
         guard !sources.isEmpty else { return }
 
-        await performOperation {
-            _ = try await fileOps.copyItems(from: sources, to: rightPanelPath) {
-                [weak self] prog, msg in
-                Task { @MainActor in
-                    self?.operationProgress = prog
-                    self?.statusMessage = msg
-                }
-            }
+        await performOperationWithConflictCheck(
+            sources: sources, destination: rightPanelPath, isCopy: true
+        ) { [weak self] in
+            guard let self = self else { return }
+            self.leftSelectedFiles.removeAll()
+            await self.loadRightPanel()
+            // Auto-sync missing folders
+            _ = try? await self.fileOps.syncCreateMissingFolders(
+                source: self.leftPanelPath, destination: self.rightPanelPath)
         }
-
-        leftSelectedFiles.removeAll()
-        await loadRightPanel()
     }
 
-    /// Copy from right to left
+    /// Copy from right to left with conflict detection
     func copyRightToLeft() async {
         let sources = Array(rightSelectedFiles)
         guard !sources.isEmpty else { return }
 
-        await performOperation {
-            _ = try await fileOps.copyItems(from: sources, to: leftPanelPath) {
-                [weak self] prog, msg in
-                Task { @MainActor in
-                    self?.operationProgress = prog
-                    self?.statusMessage = msg
-                }
-            }
+        await performOperationWithConflictCheck(
+            sources: sources, destination: leftPanelPath, isCopy: true
+        ) { [weak self] in
+            guard let self = self else { return }
+            self.rightSelectedFiles.removeAll()
+            await self.loadLeftPanel()
+            // Auto-sync missing folders
+            _ = try? await self.fileOps.syncCreateMissingFolders(
+                source: self.rightPanelPath, destination: self.leftPanelPath)
         }
-
-        rightSelectedFiles.removeAll()
-        await loadLeftPanel()
     }
 
-    /// Move from left to right
+    /// Move from left to right with conflict detection
     func moveLeftToRight() async {
         let sources = Array(leftSelectedFiles)
         guard !sources.isEmpty else { return }
 
-        await performOperation {
-            _ = try await fileOps.moveItems(from: sources, to: rightPanelPath) {
-                [weak self] prog, msg in
-                Task { @MainActor in
-                    self?.operationProgress = prog
-                    self?.statusMessage = msg
-                }
-            }
+        await performOperationWithConflictCheck(
+            sources: sources, destination: rightPanelPath, isCopy: false
+        ) { [weak self] in
+            guard let self = self else { return }
+            self.leftSelectedFiles.removeAll()
+            await self.loadLeftPanel()
+            await self.loadRightPanel()
+            // Auto-sync missing folders
+            _ = try? await self.fileOps.syncCreateMissingFolders(
+                source: self.leftPanelPath, destination: self.rightPanelPath)
         }
-
-        leftSelectedFiles.removeAll()
-        await loadLeftPanel()
-        await loadRightPanel()
     }
 
-    /// Move from right to left
+    /// Move from right to left with conflict detection
     func moveRightToLeft() async {
         let sources = Array(rightSelectedFiles)
         guard !sources.isEmpty else { return }
 
-        await performOperation {
-            _ = try await fileOps.moveItems(from: sources, to: leftPanelPath) {
-                [weak self] prog, msg in
-                Task { @MainActor in
-                    self?.operationProgress = prog
-                    self?.statusMessage = msg
+        await performOperationWithConflictCheck(
+            sources: sources, destination: leftPanelPath, isCopy: false
+        ) { [weak self] in
+            guard let self = self else { return }
+            self.rightSelectedFiles.removeAll()
+            await self.loadLeftPanel()
+            await self.loadRightPanel()
+            // Auto-sync missing folders
+            _ = try? await self.fileOps.syncCreateMissingFolders(
+                source: self.rightPanelPath, destination: self.leftPanelPath)
+        }
+    }
+
+    /// Perform operation with conflict checking
+    private func performOperationWithConflictCheck(
+        sources: [String],
+        destination: String,
+        isCopy: Bool,
+        completion: @escaping () async -> Void
+    ) async {
+        isOperating = true
+        errorMessage = nil
+        var hasConflicts = false
+
+        // Check for conflicts
+        for source in sources {
+            let conflict = fileOps.checkConflict(source: source, destination: destination)
+            if conflict.exists {
+                hasConflicts = true
+
+                // Show alert based on conflict type
+                let fileName = URL(fileURLWithPath: source).lastPathComponent
+                let shouldProceed: Bool
+
+                switch conflict.conflictType {
+                case .fileReplace:
+                    shouldProceed = await showAlert(
+                        title: "File Exists",
+                        message: "\"\(fileName)\" already exists. Do you want to replace it?",
+                        primaryButton: "Replace",
+                        secondaryButton: "Skip"
+                    )
+                case .directoryMerge:
+                    shouldProceed = await showAlert(
+                        title: "Folder Exists",
+                        message: "\"\(fileName)\" already exists. Merge contents?",
+                        primaryButton: "Merge",
+                        secondaryButton: "Skip"
+                    )
+                case .typeMismatch:
+                    errorMessage = "Cannot replace file with folder or vice versa: \(fileName)"
+                    isOperating = false
+                    return
+                case .none:
+                    shouldProceed = true
                 }
+
+                if !shouldProceed {
+                    continue
+                }
+            }
+
+            // Perform the operation
+            do {
+                if isCopy {
+                    _ = try await fileOps.copyItemSmart(
+                        from: source,
+                        to: destination,
+                        replace: hasConflicts
+                    ) { [weak self] prog, msg in
+                        Task { @MainActor in
+                            self?.operationProgress = prog
+                            self?.statusMessage = msg
+                        }
+                    }
+                } else {
+                    _ = try await fileOps.moveItemSmart(
+                        from: source,
+                        to: destination,
+                        replace: hasConflicts
+                    ) { [weak self] prog, msg in
+                        Task { @MainActor in
+                            self?.operationProgress = prog
+                            self?.statusMessage = msg
+                        }
+                    }
+                }
+            } catch {
+                errorMessage = error.localizedDescription
             }
         }
 
-        rightSelectedFiles.removeAll()
-        await loadLeftPanel()
-        await loadRightPanel()
+        await completion()
+        statusMessage = isCopy ? "Copy completed" : "Move completed"
+        isOperating = false
+    }
+
+    /// Show alert dialog and return user's choice
+    private func showAlert(
+        title: String, message: String, primaryButton: String, secondaryButton: String
+    ) async -> Bool {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = title
+                alert.informativeText = message
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: primaryButton)
+                alert.addButton(withTitle: secondaryButton)
+
+                let response = alert.runModal()
+                continuation.resume(returning: response == .alertFirstButtonReturn)
+            }
+        }
     }
 
     /// Delete selected files in left panel
@@ -205,9 +365,10 @@ class FileSyncViewModel: ObservableObject {
             rightPanelPath: rightPanelPath
         )
 
-        sessions.append(session)
+        sessionManager.addSession(session)
+        sessions = sessionManager.loadSessions()
         currentSession = session
-        saveSessions()
+        showSetup = false
     }
 
     /// Load a session
@@ -215,42 +376,70 @@ class FileSyncViewModel: ObservableObject {
         currentSession = session
         leftPanelPath = session.leftPanelPath
         rightPanelPath = session.rightPanelPath
+        showSetup = false
 
         await loadLeftPanel()
         await loadRightPanel()
 
+        // Auto-sync missing folders in both directions
+        _ = try? await fileOps.syncCreateMissingFolders(
+            source: leftPanelPath, destination: rightPanelPath)
+
         // Update last used date
-        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
-            sessions[index].lastUsedDate = Date()
-            saveSessions()
-        }
+        sessionManager.updateLastUsed(session)
+        sessions = sessionManager.loadSessions()
     }
 
     /// Delete a session
     func deleteSession(_ session: SyncSession) {
-        sessions.removeAll { $0.id == session.id }
-        saveSessions()
+        sessionManager.removeSession(session)
+        sessions = sessionManager.loadSessions()
 
         if currentSession?.id == session.id {
             currentSession = nil
         }
     }
 
-    /// Load sessions from UserDefaults
+    /// Load sessions from persistence
     private func loadSessions() {
-        guard let data = userDefaults.data(forKey: sessionsKey),
-            let decoded = try? JSONDecoder().decode([SyncSession].self, from: data)
-        else {
-            return
-        }
-        sessions = decoded
+        sessions = sessionManager.loadSessions()
     }
 
-    /// Save sessions to UserDefaults
-    private func saveSessions() {
-        if let data = try? JSONEncoder().encode(sessions) {
-            userDefaults.set(data, forKey: sessionsKey)
+    /// Start new session manually
+    func startNewSession(leftPath: String, rightPath: String) async {
+        guard leftPath != rightPath else {
+            errorMessage = "Source and destination must be different"
+            return
         }
+
+        leftPanelPath = leftPath
+        rightPanelPath = rightPath
+        showSetup = false
+
+        await loadLeftPanel()
+        await loadRightPanel()
+
+        // Auto-sync missing folders
+        _ = try? await fileOps.syncCreateMissingFolders(
+            source: leftPanelPath, destination: rightPanelPath)
+
+        // Auto-save to history
+        let session = SyncSession(
+            name: "Auto-saved session",
+            leftPanelPath: leftPath,
+            rightPanelPath: rightPath
+        )
+        sessionManager.addSession(session)
+        sessions = sessionManager.loadSessions()
+        currentSession = session
+    }
+
+    /// Reset to setup screen
+    func resetToSetup() {
+        showSetup = true
+        leftSelectedFiles.removeAll()
+        rightSelectedFiles.removeAll()
+        currentSession = nil
     }
 
     /// Perform an operation with error handling
@@ -305,5 +494,78 @@ class FileSyncViewModel: ObservableObject {
     /// Deselect all in right panel
     func deselectAllRight() {
         rightSelectedFiles.removeAll()
+    }
+
+    /// Handle dropped files from drag and drop (MOVE operation)
+    func handleDroppedFiles(_ urls: [URL], toPanel panel: Panel) async {
+        guard !urls.isEmpty else { return }
+
+        let paths = urls.map { $0.path }
+        let destinationPath = panel == .left ? leftPanelPath : rightPanelPath
+
+        // Check if files are being dropped in their own panel (do nothing)
+        let sourcePath = URL(fileURLWithPath: paths[0]).deletingLastPathComponent().path
+        if sourcePath == destinationPath {
+            // Same panel - cancel operation
+            return
+        }
+
+        // Use move operation with conflict detection
+        await performOperationWithConflictCheck(
+            sources: paths, destination: destinationPath, isCopy: false
+        ) { [weak self] in
+            guard let self = self else { return }
+            // Reload both panels since files were moved
+            await self.loadLeftPanel()
+            await self.loadRightPanel()
+        }
+    }
+
+    /// Sort files based on selected option and order
+    private func sortFiles(_ files: [FileInfo], by option: SortOption, order: SortOrder)
+        -> [FileInfo]
+    {
+        let sorted = files.sorted { file1, file2 in
+            // Always put directories first
+            if file1.isDirectory != file2.isDirectory {
+                return file1.isDirectory
+            }
+
+            // Then sort by selected option
+            let comparison: Bool
+            switch option {
+            case .name:
+                comparison = file1.name.localizedStandardCompare(file2.name) == .orderedAscending
+            case .size:
+                comparison = file1.size < file2.size
+            case .dateModified:
+                comparison = file1.modifiedDate < file2.modifiedDate
+            }
+
+            return order == .ascending ? comparison : !comparison
+        }
+        return sorted
+    }
+
+    /// Change sort option for left panel
+    func setSortLeft(by option: SortOption) {
+        if leftSortOption == option {
+            leftSortOrder.toggle()
+        } else {
+            leftSortOption = option
+            leftSortOrder = .ascending
+        }
+        leftPanelFiles = sortFiles(leftPanelFiles, by: leftSortOption, order: leftSortOrder)
+    }
+
+    /// Change sort option for right panel
+    func setSortRight(by option: SortOption) {
+        if rightSortOption == option {
+            rightSortOrder.toggle()
+        } else {
+            rightSortOption = option
+            rightSortOrder = .ascending
+        }
+        rightPanelFiles = sortFiles(rightPanelFiles, by: rightSortOption, order: rightSortOrder)
     }
 }

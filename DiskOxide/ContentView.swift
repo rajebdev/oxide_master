@@ -147,6 +147,7 @@ struct SidebarButton: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? Constants.Colors.primaryColor.opacity(0.1) : Color.clear)
             .foregroundColor(isSelected ? Constants.Colors.primaryColor : .primary)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()

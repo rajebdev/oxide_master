@@ -158,7 +158,10 @@ struct FileInfo: Identifiable, Codable, Hashable {
 
     /// Get formatted size string
     var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
+        if isDirectory {
+            return "-"
+        }
+        return ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
     }
 
     /// Get icon name for SF Symbol
