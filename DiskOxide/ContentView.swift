@@ -16,6 +16,7 @@ struct ContentView: View {
         case fileSync
         case cache
         case uninstaller
+        case installer
         case about
     }
 
@@ -46,6 +47,8 @@ struct ContentView: View {
                         CacheManagerView()
                     case .uninstaller:
                         AppUninstallerView()
+                    case .installer:
+                        AppInstallerView()
                     case .about:
                         AboutView()
                     }
@@ -70,9 +73,11 @@ struct HeaderView: View {
                     .font(.title)
                     .fontWeight(.bold)
 
-                Text("Disk Analyzer • Backup Manager • File Sync • Cache Cleaner • App Uninstaller")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(
+                    "Disk Analyzer • Backup Manager • File Sync • Cache Cleaner • App Uninstaller • App Installer"
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
 
             Spacer()
@@ -127,6 +132,14 @@ struct SidebarView: View {
                 isSelected: selectedTab == .uninstaller
             ) {
                 selectedTab = .uninstaller
+            }
+
+            SidebarButton(
+                title: "App Installer",
+                icon: "arrow.down.app.fill",
+                isSelected: selectedTab == .installer
+            ) {
+                selectedTab = .installer
             }
 
             Spacer()
