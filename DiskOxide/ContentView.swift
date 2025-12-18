@@ -95,35 +95,11 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             SidebarButton(
-                title: "Disk Analyzer",
-                icon: Constants.Icons.disk,
-                isSelected: selectedTab == .analyzer
+                title: "App Installer",
+                icon: "arrow.down.app.fill",
+                isSelected: selectedTab == .installer
             ) {
-                selectedTab = .analyzer
-            }
-
-            SidebarButton(
-                title: "Backup Manager",
-                icon: Constants.Icons.backup,
-                isSelected: selectedTab == .backup
-            ) {
-                selectedTab = .backup
-            }
-
-            SidebarButton(
-                title: "File Sync",
-                icon: Constants.Icons.sync,
-                isSelected: selectedTab == .fileSync
-            ) {
-                selectedTab = .fileSync
-            }
-
-            SidebarButton(
-                title: "Cache Manager",
-                icon: Constants.Icons.cache,
-                isSelected: selectedTab == .cache
-            ) {
-                selectedTab = .cache
+                selectedTab = .installer
             }
 
             SidebarButton(
@@ -135,11 +111,35 @@ struct SidebarView: View {
             }
 
             SidebarButton(
-                title: "App Installer",
-                icon: "arrow.down.app.fill",
-                isSelected: selectedTab == .installer
+                title: "Disk Analyzer",
+                icon: Constants.Icons.disk,
+                isSelected: selectedTab == .analyzer
             ) {
-                selectedTab = .installer
+                selectedTab = .analyzer
+            }
+
+            SidebarButton(
+                title: "Cache Manager",
+                icon: Constants.Icons.cache,
+                isSelected: selectedTab == .cache
+            ) {
+                selectedTab = .cache
+            }
+
+            SidebarButton(
+                title: "File Sync",
+                icon: Constants.Icons.sync,
+                isSelected: selectedTab == .fileSync
+            ) {
+                selectedTab = .fileSync
+            }
+
+            SidebarButton(
+                title: "Backup Manager",
+                icon: Constants.Icons.backup,
+                isSelected: selectedTab == .backup
+            ) {
+                selectedTab = .backup
             }
 
             Spacer()
