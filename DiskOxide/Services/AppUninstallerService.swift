@@ -660,7 +660,75 @@ class AppUninstallerService: ObservableObject {
     }
 
     private func getLastUsedDate(for url: URL) -> Date? {
-        try? url.resourceValues(forKeys: [.contentAccessDateKey]).contentAccessDate
+        var dates: [Date] = []
+
+        // Check content access date
+        if let accessDate = try? url.resourceValues(forKeys: [.contentAccessDateKey])
+            .contentAccessDate
+        {
+            dates.append(accessDate)
+        }
+
+        // Check content modification date
+        if let modDate = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+            .contentModificationDate
+        {
+            dates.append(modDate)
+        }
+
+        // Check attribute modification date
+        if let attrModDate = try? url.resourceValues(forKeys: [.attributeModificationDateKey])
+            .attributeModificationDate
+        {
+            dates.append(attrModDate)
+        }
+
+        // For .app bundles, check the executable and recent files
+        if url.pathExtension == "app" {
+            let executablePath = url.appendingPathComponent("Contents/MacOS")
+            if let contents = try? fileManager.contentsOfDirectory(
+                at: executablePath,
+                includingPropertiesForKeys: [.contentAccessDateKey, .contentModificationDateKey],
+                options: [])
+            {
+                for file in contents {
+                    if let fileAccessDate = try? file.resourceValues(forKeys: [
+                        .contentAccessDateKey
+                    ]).contentAccessDate {
+                        dates.append(fileAccessDate)
+                    }
+                    if let fileModDate = try? file.resourceValues(forKeys: [
+                        .contentModificationDateKey
+                    ]).contentModificationDate {
+                        dates.append(fileModDate)
+                    }
+                }
+            }
+
+            // Check Preferences and Caches for recent activity
+            if let bundleId = Bundle(url: url)?.bundleIdentifier {
+                let homeDir = NSHomeDirectory()
+                let activityPaths = [
+                    "\(homeDir)/Library/Preferences/\(bundleId).plist",
+                    "\(homeDir)/Library/Caches/\(bundleId)",
+                    "\(homeDir)/Library/Saved Application State/\(bundleId).savedState",
+                ]
+
+                for path in activityPaths {
+                    let activityURL = URL(fileURLWithPath: path)
+                    if fileManager.fileExists(atPath: activityURL.path) {
+                        if let modDate = try? activityURL.resourceValues(forKeys: [
+                            .contentModificationDateKey
+                        ]).contentModificationDate {
+                            dates.append(modDate)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Return the most recent date
+        return dates.max()
     }
 
     private func extractBundleIdentifier(from name: String) -> String? {
