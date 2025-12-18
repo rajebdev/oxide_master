@@ -50,50 +50,308 @@ class CacheCleanerService {
         }
     }
 
-    /// Run cache cleanup
-    func runCleanup(
+    /// Scan for cache items (preview mode)
+    func scanCacheItems(
         settings: CacheSettings,
         progressHandler: @escaping (Double, String) -> Void
-    ) async throws -> CleanupSummary {
-        guard settings.enabled else {
-            throw CacheCleanupError.cleanupDisabled
-        }
-
-        let startTime = Date()
+    ) async throws -> [CacheItem] {
+        var cacheItems: [CacheItem] = []
         progressHandler(0.0, "Scanning cache folders...")
 
-        // Find cache files to delete
-        let cacheFiles = try await scanCacheFiles(settings: settings)
+        // Scan regular cache folders
+        for (index, parentFolder) in settings.parentFolders.enumerated() {
+            let progress = Double(index) / Double(settings.parentFolders.count) * 0.5
+            progressHandler(progress, "Scanning \(parentFolder)...")
 
-        progressHandler(0.3, "Found \(cacheFiles.count) cache files")
+            guard fileManager.fileExists(atPath: parentFolder) else { continue }
 
-        // Delete files
+            let parentURL = URL(fileURLWithPath: parentFolder)
+
+            for cacheFolderName in settings.cacheFolderNames {
+                let cacheURL = parentURL.appendingPathComponent(cacheFolderName)
+
+                if fileManager.fileExists(atPath: cacheURL.path) {
+                    if let size = try? await getFolderSize(at: cacheURL.path) {
+                        let item = CacheItem(
+                            path: cacheURL.path,
+                            name: cacheFolderName,
+                            sizeBytes: size,
+                            type: "System Cache"
+                        )
+                        cacheItems.append(item)
+                    }
+                }
+            }
+        }
+
+        progressHandler(0.5, "Scanning project caches...")
+
+        // Scan project cache folders if enabled
+        if settings.projectCacheEnabled {
+            let projectCaches = try await scanProjectCacheItems(
+                settings: settings,
+                progressHandler: { prog, msg in
+                    progressHandler(0.5 + (prog * 0.5), msg)
+                }
+            )
+            cacheItems.append(contentsOf: projectCaches)
+        }
+
+        progressHandler(1.0, "Scan complete")
+        return cacheItems
+    }
+
+    /// Scan for project cache items
+    private func scanProjectCacheItems(
+        settings: CacheSettings,
+        progressHandler: @escaping (Double, String) -> Void
+    ) async throws -> [CacheItem] {
+        var projectCaches: [CacheItem] = []
+        var addedPaths: Set<String> = []
+        let homeDir = fileManager.homeDirectoryForCurrentUser.path
+
+        let projectLocations = [
+            "\(homeDir)/Documents",
+            "\(homeDir)/Projects",
+            "\(homeDir)/Developer",
+            "\(homeDir)/workspace",
+            "\(homeDir)/code",
+        ]
+
+        for (index, location) in projectLocations.enumerated() {
+            let progress = Double(index) / Double(projectLocations.count)
+            progressHandler(progress, "Scanning \(location)...")
+
+            guard fileManager.fileExists(atPath: location) else { continue }
+
+            let caches = try await scanDirectoryForProjectCacheItems(
+                at: location,
+                depth: 0,
+                maxDepth: settings.projectScanDepth,
+                enabledTypes: settings.enabledProjectCacheTypes,
+                addedPaths: &addedPaths
+            )
+            projectCaches.append(contentsOf: caches)
+        }
+
+        return projectCaches
+    }
+
+    /// Recursively scan directory for project cache items
+    private func scanDirectoryForProjectCacheItems(
+        at path: String,
+        depth: Int,
+        maxDepth: Int,
+        enabledTypes: [ProjectCacheType],
+        addedPaths: inout Set<String>
+    ) async throws -> [CacheItem] {
+        guard depth < maxDepth else { return [] }
+
+        // Check if current path is already inside an added parent
+        let currentPath = path
+        for addedPath in addedPaths {
+            if currentPath.hasPrefix(addedPath + "/") || currentPath == addedPath {
+                // This path is inside an already added parent, skip it
+                return []
+            }
+        }
+
+        var foundCaches: [CacheItem] = []
+        let url = URL(fileURLWithPath: path)
+
+        guard
+            let contents = try? fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return []
+        }
+
+        for itemURL in contents {
+            let isDirectory =
+                (try? itemURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            guard isDirectory else { continue }
+
+            let itemPath = itemURL.path
+
+            // Check if this path is already inside an added parent
+            var isInsideAddedPath = false
+            for addedPath in addedPaths {
+                if itemPath.hasPrefix(addedPath + "/") || itemPath == addedPath {
+                    isInsideAddedPath = true
+                    break
+                }
+            }
+
+            if isInsideAddedPath {
+                // Skip this path as it's inside an already added parent
+                continue
+            }
+
+            let folderName = itemURL.lastPathComponent
+
+            // Check if this is a project cache folder
+            var foundMatch = false
+            for cacheType in enabledTypes {
+                if folderName == cacheType.folderName {
+                    // Validate it's actually a project folder
+                    if isValidProjectCache(cacheFolder: itemPath, type: cacheType) {
+                        // Get size and last modified date
+                        if let size = try? await getFolderSize(at: itemPath) {
+                            let lastModified = getLastModifiedDate(at: itemPath)
+                            let item = CacheItem(
+                                path: itemPath,
+                                name: folderName,
+                                sizeBytes: size,
+                                type: cacheType.displayName,
+                                lastModified: lastModified
+                            )
+                            foundCaches.append(item)
+                            addedPaths.insert(itemPath)
+                            foundMatch = true
+                            break  // Only add once per folder
+                        }
+                    }
+                }
+            }
+
+            if foundMatch {
+                // Don't recurse into cache folders
+                continue
+            }
+
+            // Recurse into subdirectories
+            let subCaches = try await scanDirectoryForProjectCacheItems(
+                at: itemPath,
+                depth: depth + 1,
+                maxDepth: maxDepth,
+                enabledTypes: enabledTypes,
+                addedPaths: &addedPaths
+            )
+            foundCaches.append(contentsOf: subCaches)
+        }
+
+        return foundCaches
+    }
+
+    /// Get folder size using du command
+    private func getFolderSize(at path: String) async throws -> Int64 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/du")
+        process.arguments = ["-sk", path]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        try process.run()
+        process.waitUntilExit()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else {
+            return 0
+        }
+
+        // Parse output: "12345\t/path/to/folder"
+        let components = output.components(separatedBy: "\t")
+        guard let sizeStr = components.first,
+            let sizeKB = Int64(sizeStr.trimmingCharacters(in: .whitespacesAndNewlines))
+        else {
+            return 0
+        }
+
+        return sizeKB * 1024  // Convert KB to bytes
+    }
+
+    /// Get last modified date of a folder
+    private func getLastModifiedDate(at path: String) -> Date? {
+        // Get the most recent modification date from the folder and all its contents
+        return getMostRecentModificationDate(at: path)
+    }
+
+    /// Get the most recent modification date from a folder and all its contents recursively
+    private func getMostRecentModificationDate(at path: String) -> Date? {
+        let url = URL(fileURLWithPath: path)
+
+        // Get the folder's own modification date
+        guard let folderAttributes = try? fileManager.attributesOfItem(atPath: path),
+            var mostRecentDate = folderAttributes[.modificationDate] as? Date
+        else {
+            return nil
+        }
+
+        // Create an enumerator to traverse all contents
+        guard
+            let enumerator = fileManager.enumerator(
+                at: url,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return mostRecentDate
+        }
+
+        // Check all files and folders inside
+        for case let fileURL as URL in enumerator {
+            if let resourceValues = try? fileURL.resourceValues(forKeys: [
+                .contentModificationDateKey
+            ]),
+                let modDate = resourceValues.contentModificationDate
+            {
+                // Update if this date is more recent
+                if modDate > mostRecentDate {
+                    mostRecentDate = modDate
+                }
+            }
+        }
+
+        return mostRecentDate
+    }
+
+    /// Run cache cleanup with selected items
+    func runCleanup(
+        items: [CacheItem],
+        progressHandler: @escaping (Double, String) -> Void
+    ) async throws -> CleanupSummary {
+        let startTime = Date()
+        let selectedItems = items.filter { $0.isSelected }
+
+        guard !selectedItems.isEmpty else {
+            throw CacheCleanupError.noItemsSelected
+        }
+
+        progressHandler(0.0, "Starting cleanup...")
+
+        // Delete items
         var records: [CleanupRecord] = []
         var totalSize: Int64 = 0
 
-        for (index, file) in cacheFiles.enumerated() {
-            let progress = 0.3 + (0.7 * Double(index) / Double(cacheFiles.count))
-            progressHandler(progress, "Deleting \(file.name)...")
+        for (index, item) in selectedItems.enumerated() {
+            let progress = Double(index) / Double(selectedItems.count)
+            progressHandler(progress, "Deleting \(item.name)...")
 
             do {
-                let size = file.size
-                try fileManager.removeItem(atPath: file.path)
+                // Move to trash instead of deleting
+                let url = URL(fileURLWithPath: item.path)
+                try fileManager.trashItem(at: url, resultingItemURL: nil)
 
                 let record = CleanupRecord(
-                    filePath: file.path,
-                    sizeBytes: size,
+                    filePath: item.path,
+                    sizeBytes: item.sizeBytes,
                     deletedSuccessfully: true
                 )
                 records.append(record)
-                totalSize += size
+                totalSize += item.sizeBytes
             } catch {
                 let record = CleanupRecord(
-                    filePath: file.path,
-                    sizeBytes: file.size,
+                    filePath: item.path,
+                    sizeBytes: item.sizeBytes,
                     deletedSuccessfully: false
                 )
                 records.append(record)
-                print("Error deleting \(file.path): \(error)")
+                print("Error deleting \(item.path): \(error)")
             }
         }
 
@@ -108,9 +366,9 @@ class CacheCleanerService {
         saveHistory(history)
 
         // Update last cleanup date
-        var updatedSettings = settings
-        updatedSettings.lastCleanupDate = Date()
-        saveSettings(updatedSettings)
+        var settings = loadSettings()
+        settings.lastCleanupDate = Date()
+        saveSettings(settings)
 
         let duration = Date().timeIntervalSince(startTime)
         progressHandler(1.0, "Cleanup complete")
@@ -130,6 +388,7 @@ class CacheCleanerService {
     private func scanCacheFiles(settings: CacheSettings) async throws -> [FileInfo] {
         var cacheFiles: [FileInfo] = []
 
+        // Regular cache folders
         for parentFolder in settings.parentFolders {
             guard fileManager.fileExists(atPath: parentFolder) else { continue }
 
@@ -170,7 +429,237 @@ class CacheCleanerService {
             }
         }
 
+        // Project cache folders (with validation)
+        if settings.projectCacheEnabled {
+            let projectCaches = try await scanProjectCaches(settings: settings)
+            cacheFiles.append(contentsOf: projectCaches)
+        }
+
         return cacheFiles
+    }
+
+    /// Scan for project cache folders with validation
+    private func scanProjectCaches(settings: CacheSettings) async throws -> [FileInfo] {
+        var projectCaches: [FileInfo] = []
+        var addedPaths: Set<String> = []
+        let homeDir = fileManager.homeDirectoryForCurrentUser.path
+
+        // Start from common project locations
+        let projectLocations = [
+            "\(homeDir)/Documents",
+            "\(homeDir)/Projects",
+            "\(homeDir)/Developer",
+            "\(homeDir)/workspace",
+            "\(homeDir)/code",
+        ]
+
+        for location in projectLocations {
+            guard fileManager.fileExists(atPath: location) else { continue }
+
+            let caches = try await scanDirectoryForProjectCaches(
+                at: location,
+                depth: 0,
+                maxDepth: settings.projectScanDepth,
+                enabledTypes: settings.enabledProjectCacheTypes,
+                addedPaths: &addedPaths
+            )
+            projectCaches.append(contentsOf: caches)
+        }
+
+        return projectCaches
+    }
+
+    /// Recursively scan directory for project caches
+    private func scanDirectoryForProjectCaches(
+        at path: String,
+        depth: Int,
+        maxDepth: Int,
+        enabledTypes: [ProjectCacheType],
+        addedPaths: inout Set<String>
+    ) async throws -> [FileInfo] {
+        guard depth < maxDepth else { return [] }
+
+        // Check if current path is already inside an added parent
+        let currentPath = path
+        for addedPath in addedPaths {
+            if currentPath.hasPrefix(addedPath + "/") || currentPath == addedPath {
+                // This path is inside an already added parent, skip it
+                return []
+            }
+        }
+
+        var foundCaches: [FileInfo] = []
+        let url = URL(fileURLWithPath: path)
+
+        guard
+            let contents = try? fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return []
+        }
+
+        for itemURL in contents {
+            let isDirectory =
+                (try? itemURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            guard isDirectory else { continue }
+
+            let itemPath = itemURL.path
+
+            // Check if this path is already inside an added parent
+            var isInsideAddedPath = false
+            for addedPath in addedPaths {
+                if itemPath.hasPrefix(addedPath + "/") || itemPath == addedPath {
+                    isInsideAddedPath = true
+                    break
+                }
+            }
+
+            if isInsideAddedPath {
+                // Skip this path as it's inside an already added parent
+                continue
+            }
+
+            let folderName = itemURL.lastPathComponent
+
+            // Check if this is a project cache folder
+            var foundMatch = false
+            for cacheType in enabledTypes {
+                if folderName == cacheType.folderName {
+                    // Validate it's actually a project folder
+                    if isValidProjectCache(cacheFolder: itemPath, type: cacheType) {
+                        // Add the entire folder as a cache item
+                        if let cacheInfo = try? FileInfo.from(url: itemURL, includeChildren: false)
+                        {
+                            foundCaches.append(cacheInfo)
+                            addedPaths.insert(itemPath)
+                            foundMatch = true
+                            break  // Only add once per folder
+                        }
+                    }
+                }
+            }
+
+            if foundMatch {
+                // Don't recurse into cache folders
+                continue
+            }
+
+            // Recurse into subdirectories
+            let subCaches = try await scanDirectoryForProjectCaches(
+                at: itemPath,
+                depth: depth + 1,
+                maxDepth: maxDepth,
+                enabledTypes: enabledTypes,
+                addedPaths: &addedPaths
+            )
+            foundCaches.append(contentsOf: subCaches)
+        }
+
+        return foundCaches
+    }
+
+    /// Validate that a cache folder is actually part of a project
+    private func isValidProjectCache(cacheFolder: String, type: ProjectCacheType) -> Bool {
+        let cacheFolderURL = URL(fileURLWithPath: cacheFolder)
+        let parentURL = cacheFolderURL.deletingLastPathComponent()
+
+        // Check for validation files in parent directory
+        for validationPattern in type.validationFiles {
+            if validationPattern.contains("*") {
+                // Handle wildcard patterns (e.g., "*.py", "*.csproj")
+                let ext = validationPattern.replacingOccurrences(of: "*", with: "")
+                if hasFilesWithExtension(ext, in: parentURL.path) {
+                    return true
+                }
+            } else {
+                // Check for specific file
+                let validationURL = parentURL.appendingPathComponent(validationPattern)
+                if fileManager.fileExists(atPath: validationURL.path) {
+                    return true
+                }
+            }
+        }
+
+        // Special validations for ambiguous folder names
+        switch type {
+        case .rustTarget, .cargoTarget:
+            let cargoToml = parentURL.appendingPathComponent("Cargo.toml")
+            return fileManager.fileExists(atPath: cargoToml.path)
+
+        case .javaTarget:
+            let hasPom = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("pom.xml").path)
+            let hasGradle = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("build.gradle").path)
+            return hasPom || hasGradle
+
+        case .scalaTarget:
+            let hasSbt = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("build.sbt").path)
+            let hasSc = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("build.sc").path)
+            return hasSbt || hasSc
+
+        case .goVendor:
+            // Go vendor folder
+            let hasGoMod = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("go.mod").path)
+            let hasGopkg = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("Gopkg.toml").path)
+            return hasGoMod || hasGopkg
+
+        case .phpVendor:
+            // PHP Composer vendor folder
+            let hasComposer = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("composer.json").path)
+            return hasComposer
+
+        case .rubyVendor:
+            // Ruby bundler vendor/bundle
+            let hasGemfile = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("Gemfile").path)
+            return hasGemfile
+
+        case .derivedData:
+            // Xcode DerivedData - check parent for .xcodeproj or .xcworkspace
+            return hasFilesWithExtension(".xcodeproj", in: parentURL.path)
+                || hasFilesWithExtension(".xcworkspace", in: parentURL.path)
+
+        case .gradleBuild, .kotlinBuild:
+            let hasGradle =
+                fileManager.fileExists(
+                    atPath: parentURL.appendingPathComponent("build.gradle").path)
+                || fileManager.fileExists(
+                    atPath: parentURL.appendingPathComponent("build.gradle.kts").path)
+            return hasGradle
+
+        case .flutterBuild:
+            let hasPubspec = fileManager.fileExists(
+                atPath: parentURL.appendingPathComponent("pubspec.yaml").path)
+            return hasPubspec
+
+        case .dotnetObj, .dotnetBin:
+            return hasFilesWithExtension(".csproj", in: parentURL.path)
+                || hasFilesWithExtension(".fsproj", in: parentURL.path)
+                || hasFilesWithExtension(".vbproj", in: parentURL.path)
+
+        default:
+            break
+        }
+
+        return false
+    }
+
+    /// Check if directory has files with specific extension
+    private func hasFilesWithExtension(_ ext: String, in directory: String) -> Bool {
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: directory) else {
+            return false
+        }
+
+        return contents.contains { $0.hasSuffix(ext) }
     }
 
     /// Scan a cache folder for old files
@@ -251,6 +740,7 @@ enum CacheCleanupError: LocalizedError {
     case cleanupDisabled
     case scanFailed
     case deleteFailed(String)
+    case noItemsSelected
 
     var errorDescription: String? {
         switch self {
@@ -260,6 +750,8 @@ enum CacheCleanupError: LocalizedError {
             return "Failed to scan cache folders"
         case .deleteFailed(let message):
             return "Delete failed: \(message)"
+        case .noItemsSelected:
+            return "No items selected for cleanup"
         }
     }
 }

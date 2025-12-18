@@ -11,7 +11,7 @@ struct CacheManagerView: View {
     @StateObject private var viewModel = CacheManagerViewModel()
     @State private var showingSettings = false
     @State private var showingHistory = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -20,23 +20,28 @@ struct CacheManagerView: View {
                 showingSettings: $showingSettings,
                 showingHistory: $showingHistory
             )
-            
+
             Divider()
-            
+
             // Content
             ScrollView {
                 VStack(spacing: 20) {
+                    // Pending scheduled cleanup alert
+                    if viewModel.hasPendingScheduledCleanup && !viewModel.showPreview {
+                        ScheduledCleanupAlert(viewModel: viewModel)
+                    }
+
                     // Status card
                     CacheStatusCard(viewModel: viewModel)
-                    
+
                     // Progress
-                    if viewModel.isRunning {
+                    if viewModel.isScanning || viewModel.isRunning {
                         VStack(spacing: 12) {
                             ProgressView(value: viewModel.progress) {
                                 Text(viewModel.statusMessage)
                             }
-                            
-                            Text("Cleaning up caches...")
+
+                            Text(viewModel.isScanning ? "Scanning..." : "Cleaning up caches...")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -44,12 +49,17 @@ struct CacheManagerView: View {
                         .background(Constants.Colors.cardBackgroundColor)
                         .cornerRadius(Constants.UI.cornerRadius)
                     }
-                    
+
+                    // Cache items preview
+                    if viewModel.showPreview && !viewModel.cacheItems.isEmpty {
+                        CachePreviewView(viewModel: viewModel)
+                    }
+
                     // Last cleanup summary
-                    if let summary = viewModel.lastSummary {
+                    if let summary = viewModel.lastSummary, !viewModel.showPreview {
                         CleanupSummaryCard(summary: summary)
                     }
-                    
+
                     // Error message
                     if let error = viewModel.errorMessage {
                         HStack {
@@ -63,22 +73,54 @@ struct CacheManagerView: View {
                         .background(Constants.Colors.errorColor.opacity(0.1))
                         .cornerRadius(Constants.UI.cornerRadius)
                     }
-                    
-                    // Action button
-                    Button(action: {
-                        Task {
-                            await viewModel.runCleanup()
+
+                    // Action buttons
+                    HStack(spacing: 16) {
+                        if !viewModel.showPreview {
+                            Button(action: {
+                                Task {
+                                    await viewModel.scanCacheItems()
+                                }
+                            }) {
+                                Label("Scan Cache Folders", systemImage: "magnifyingglass")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .disabled(viewModel.isScanning || !viewModel.settings.enabled)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        } else {
+                            Button(action: {
+                                Task {
+                                    await viewModel.runCleanup()
+                                }
+                            }) {
+                                Label(
+                                    "Clean Selected (\(viewModel.selectedCount))",
+                                    systemImage: "trash.fill"
+                                )
+                                .frame(maxWidth: .infinity)
+                            }
+                            .disabled(viewModel.isRunning || viewModel.selectedCount == 0)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+
+                            Button(action: {
+                                viewModel.showPreview = false
+                                viewModel.cacheItems = []
+                            }) {
+                                Text("Cancel")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
                         }
-                    }) {
-                        Label("Run Cleanup Now", systemImage: "play.fill")
-                            .frame(maxWidth: 300)
                     }
-                    .disabled(viewModel.isRunning || !viewModel.settings.enabled)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    
+                    .padding(.horizontal)
+
                     // Quick settings
-                    QuickSettingsView(viewModel: viewModel)
+                    if !viewModel.showPreview {
+                        QuickSettingsView(viewModel: viewModel)
+                    }
                 }
                 .padding()
             }
@@ -98,25 +140,25 @@ struct CacheManagerHeader: View {
     @ObservedObject var viewModel: CacheManagerViewModel
     @Binding var showingSettings: Bool
     @Binding var showingHistory: Bool
-    
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Cache Manager")
                     .font(.title2)
                     .fontWeight(.bold)
-                
+
                 Text("Automatically clean up old cache files")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
-            
+
             Button("History") {
                 showingHistory = true
             }
-            
+
             Button("Settings") {
                 showingSettings = true
             }
@@ -129,7 +171,7 @@ struct CacheManagerHeader: View {
 
 struct CacheStatusCard: View {
     @ObservedObject var viewModel: CacheManagerViewModel
-    
+
     var body: some View {
         VStack(spacing: 16) {
             HStack {
@@ -137,31 +179,35 @@ struct CacheStatusCard: View {
                     Text("Cleanup Status")
                         .font(.headline)
                     Text(viewModel.settings.enabled ? "Enabled" : "Disabled")
-                        .foregroundColor(viewModel.settings.enabled ? Constants.Colors.successColor : Constants.Colors.errorColor)
+                        .foregroundColor(
+                            viewModel.settings.enabled
+                                ? Constants.Colors.successColor : Constants.Colors.errorColor)
                 }
-                
+
                 Spacer()
-                
-                Toggle("", isOn: .init(
-                    get: { viewModel.settings.enabled },
-                    set: { _ in viewModel.toggleEnabled() }
-                ))
+
+                Toggle(
+                    "",
+                    isOn: .init(
+                        get: { viewModel.settings.enabled },
+                        set: { _ in viewModel.toggleEnabled() }
+                    ))
             }
-            
+
             Divider()
-            
+
             VStack(spacing: 8) {
                 InfoRow(label: "Age Threshold", value: viewModel.formattedAgeThreshold)
                 InfoRow(label: "Cleanup Interval", value: viewModel.formattedInterval)
-                
+
                 if let lastCleanup = viewModel.formattedLastCleanupDate {
                     InfoRow(label: "Last Cleanup", value: lastCleanup)
                 }
-                
+
                 if let nextCleanup = viewModel.formattedNextCleanupDate {
                     InfoRow(label: "Next Cleanup", value: nextCleanup)
                 }
-                
+
                 InfoRow(label: "Total Freed", value: viewModel.formattedTotalSizeFreed)
             }
         }
@@ -171,11 +217,202 @@ struct CacheStatusCard: View {
     }
 }
 
+// MARK: - Scheduled Cleanup Alert
+
+struct ScheduledCleanupAlert: View {
+    @ObservedObject var viewModel: CacheManagerViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "clock.badge.checkmark.fill")
+                    .foregroundColor(.blue)
+                    .font(.title2)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Scheduled Cleanup Ready")
+                        .font(.headline)
+                    Text(
+                        "Found \(viewModel.scheduler.pendingCacheItems.count) cache folders waiting for your approval"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                Button(action: {
+                    viewModel.loadPendingCleanup()
+                }) {
+                    Label("Review & Confirm", systemImage: "eye.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+                Button(action: {
+                    Task {
+                        await viewModel.confirmScheduledCleanup()
+                    }
+                }) {
+                    Label("Clean Now", systemImage: "trash.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button(action: {
+                    Task { @MainActor in
+                        viewModel.scheduler.pendingCacheItems = []
+                        viewModel.hasPendingScheduledCleanup = false
+                    }
+                }) {
+                    Text("Dismiss")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding()
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(Constants.UI.cornerRadius)
+        .overlay(
+            RoundedRectangle(cornerRadius: Constants.UI.cornerRadius)
+                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Cache Preview View
+
+struct CachePreviewView: View {
+    @ObservedObject var viewModel: CacheManagerViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Cache Folders Found")
+                        .font(.headline)
+                    Text(
+                        "\(viewModel.selectedCount) of \(viewModel.cacheItems.count) selected • \(viewModel.selectedTotalSize)"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button("Select All") {
+                        viewModel.selectAll()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button("Deselect All") {
+                        viewModel.deselectAll()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+
+            Divider()
+
+            // List of cache items
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(viewModel.cacheItems) { item in
+                        CacheItemRow(item: item, viewModel: viewModel)
+                    }
+                }
+            }
+            .frame(maxHeight: 400)
+        }
+        .padding()
+        .background(Constants.Colors.cardBackgroundColor)
+        .cornerRadius(Constants.UI.cornerRadius)
+    }
+}
+
+// MARK: - Cache Item Row
+
+struct CacheItemRow: View {
+    let item: CacheItem
+    @ObservedObject var viewModel: CacheManagerViewModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { item.isSelected },
+                    set: { _ in viewModel.toggleSelection(for: item) }
+                )
+            )
+            .toggleStyle(.checkbox)
+            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(item.name)
+                        .font(.body)
+                        .fontWeight(.medium)
+
+                    Text(item.type)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.2))
+                        .cornerRadius(4)
+                }
+
+                Text(item.parentPath)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                    Text(item.formattedLastModified)
+                        .font(.caption2)
+                }
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(item.formattedSize)
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.orange)
+
+                Text(item.formattedLastModifiedFull)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(8)
+        .background(item.isSelected ? Color.blue.opacity(0.05) : Color.clear)
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(
+                    item.isSelected ? Color.blue.opacity(0.3) : Color.gray.opacity(0.2),
+                    lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - Cleanup Summary Card
 
 struct CleanupSummaryCard: View {
     let summary: CleanupSummary
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -184,13 +421,14 @@ struct CleanupSummaryCard: View {
                 Text("Last Cleanup Results")
                     .font(.headline)
             }
-            
+
             Divider()
-            
+
             InfoRow(label: "Files Deleted", value: "\(summary.totalDeleted)")
             InfoRow(label: "Space Freed", value: summary.formattedSize)
             InfoRow(label: "Duration", value: String(format: "%.1f seconds", summary.duration))
-            InfoRow(label: "Success Rate", value: String(format: "%.0f%%", summary.successRate * 100))
+            InfoRow(
+                label: "Success Rate", value: String(format: "%.0f%%", summary.successRate * 100))
         }
         .padding()
         .background(Constants.Colors.successColor.opacity(0.1))
@@ -202,30 +440,36 @@ struct CleanupSummaryCard: View {
 
 struct QuickSettingsView: View {
     @ObservedObject var viewModel: CacheManagerViewModel
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Settings")
                 .font(.headline)
-            
+
             HStack {
                 Text("Age Threshold (hours):")
                 Spacer()
-                TextField("Hours", value: .init(
-                    get: { viewModel.settings.ageThresholdHours },
-                    set: { viewModel.updateAgeThreshold($0) }
-                ), format: .number)
+                TextField(
+                    "Hours",
+                    value: .init(
+                        get: { viewModel.settings.ageThresholdHours },
+                        set: { viewModel.updateAgeThreshold($0) }
+                    ), format: .number
+                )
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 100)
             }
-            
+
             HStack {
                 Text("Cleanup Interval (hours):")
                 Spacer()
-                TextField("Hours", value: .init(
-                    get: { viewModel.settings.intervalHours },
-                    set: { viewModel.updateInterval($0) }
-                ), format: .number)
+                TextField(
+                    "Hours",
+                    value: .init(
+                        get: { viewModel.settings.intervalHours },
+                        set: { viewModel.updateInterval($0) }
+                    ), format: .number
+                )
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 100)
             }
@@ -235,4 +479,3 @@ struct QuickSettingsView: View {
         .cornerRadius(Constants.UI.cornerRadius)
     }
 }
-
