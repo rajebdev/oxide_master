@@ -321,19 +321,103 @@ struct CachePreviewView: View {
 
             Divider()
 
-            // List of cache items
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(viewModel.cacheItems) { item in
-                        CacheItemRow(item: item, viewModel: viewModel)
-                    }
+            // Grouped list of cache items
+            LazyVStack(spacing: 12, pinnedViews: []) {
+                ForEach(viewModel.groupedCacheItems) { group in
+                    CacheGroupView(group: group, viewModel: viewModel)
                 }
             }
-            .frame(maxHeight: 400)
+            .padding(.vertical, 4)
         }
         .padding()
         .background(Constants.Colors.cardBackgroundColor)
         .cornerRadius(Constants.UI.cornerRadius)
+    }
+}
+
+// MARK: - Cache Group View
+
+struct CacheGroupView: View {
+    let group: CacheGroup
+    @ObservedObject var viewModel: CacheManagerViewModel
+
+    private var categoryColor: Color {
+        switch group.category.color {
+        case "orange": return .orange
+        case "blue": return .blue
+        case "purple": return .purple
+        default: return .gray
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Group Header
+            Button(action: {
+                viewModel.toggleCategoryExpansion(group.category)
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: group.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 12)
+
+                    Image(systemName: group.category.icon)
+                        .foregroundColor(categoryColor)
+                        .font(.body)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.category.rawValue)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        Text(
+                            "\(group.selectedCount)/\(group.items.count) selected • \(group.formattedSelectedSize) of \(group.formattedTotalSize)"
+                        )
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            viewModel.selectAllInCategory(group.category)
+                        }) {
+                            Image(systemName: "checkmark.square")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Select all in category")
+
+                        Button(action: {
+                            viewModel.deselectAllInCategory(group.category)
+                        }) {
+                            Image(systemName: "square")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Deselect all in category")
+                    }
+                    .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(categoryColor.opacity(0.1))
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+
+            // Group Items (when expanded)
+            if group.isExpanded {
+                VStack(spacing: 6) {
+                    ForEach(group.items) { item in
+                        CacheItemRow(item: item, viewModel: viewModel)
+                            .padding(.leading, 28)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -369,18 +453,21 @@ struct CacheItemRow: View {
                         .cornerRadius(4)
                 }
 
-                Text(item.parentPath)
+                Text(item.path)
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
 
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                    Text(item.formattedLastModified)
-                        .font(.caption2)
+                // Show last modified only for non-application cache
+                if item.category != .applicationCache {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text(item.formattedLastModified)
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.secondary)
                 }
-                .foregroundColor(.secondary)
             }
 
             Spacer()
@@ -391,9 +478,12 @@ struct CacheItemRow: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.orange)
 
-                Text(item.formattedLastModifiedFull)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                // Show full date only for non-application cache
+                if item.category != .applicationCache, item.lastModified != nil {
+                    Text(item.formattedLastModifiedFull)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding(8)

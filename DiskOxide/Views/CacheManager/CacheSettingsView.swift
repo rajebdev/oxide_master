@@ -260,9 +260,110 @@ struct CacheSettingsView: View {
                         .padding(.vertical, 4)
                     }
                 }
+
+                // Application Cache Cleaning
+                Section {
+                    Toggle(
+                        "Enable Application Cache Cleaning",
+                        isOn: .init(
+                            get: { viewModel.settings.applicationCacheEnabled },
+                            set: { _ in viewModel.toggleApplicationCacheEnabled() }
+                        )
+                    )
+                    .toggleStyle(.switch)
+
+                    Text(
+                        "Clean cache from installed macOS applications like browsers, developer tools, and more"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                } header: {
+                    Label(
+                        "Application Cache Cleaning", systemImage: "app.badge")
+                }
+
+                if viewModel.settings.applicationCacheEnabled {
+                    Section("Application Categories") {
+                        ForEach(ApplicationCacheType.allCases, id: \.self) { cacheType in
+                            Toggle(
+                                isOn: .init(
+                                    get: { viewModel.isApplicationCacheTypeEnabled(cacheType) },
+                                    set: { _ in viewModel.toggleApplicationCacheType(cacheType) }
+                                )
+                            ) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(cacheType.displayName)
+                                        .font(.body)
+                                    Text(getExampleApps(for: cacheType))
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+
+                    Section("Additional Options") {
+                        Toggle(
+                            "Scan Installed Applications",
+                            isOn: .init(
+                                get: { viewModel.settings.scanInstalledApps },
+                                set: { _ in viewModel.toggleScanInstalledApps() }
+                            )
+                        )
+                        .toggleStyle(.switch)
+
+                        Text("Automatically detect and clean cache from all apps in /Applications")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Common App Caches", systemImage: "info.circle.fill")
+                                .font(.headline)
+                                .foregroundColor(.blue)
+
+                            Text("Examples of what will be cleaned:")
+                                .font(.caption)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("Chrome/Safari/Firefox browser cache", systemImage: "globe")
+                                Label(
+                                    "Xcode DerivedData and build cache", systemImage: "hammer.fill")
+                                Label(
+                                    "Slack, Discord, Teams message cache",
+                                    systemImage: "message.fill")
+                                Label(
+                                    "VSCode, JetBrains IDE cache",
+                                    systemImage: "chevron.left.forwardslash.chevron.right")
+                                Label("Spotify, Music app cache", systemImage: "music.note")
+                            }
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
             }
             .formStyle(.grouped)
         }
-        .frame(width: 650, height: 700)
+        .frame(width: 650, height: 800)
+    }
+
+    private func getExampleApps(for type: ApplicationCacheType) -> String {
+        switch type {
+        case .browsers:
+            return "Chrome, Safari, Firefox, Edge, Brave"
+        case .developerTools:
+            return "Xcode, VSCode, JetBrains IDEs, Android Studio"
+        case .messaging:
+            return "Slack, Discord, Microsoft Teams"
+        case .media:
+            return "Spotify, VLC, Music, TV"
+        case .productivity:
+            return "Notion, Adobe Apps, Microsoft Office"
+        case .systemCache:
+            return "iCloud cache, system logs, app states"
+        }
     }
 }

@@ -24,8 +24,24 @@ class CacheManagerViewModel: ObservableObject {
     @Published var cacheItems: [CacheItem] = []
     @Published var showPreview = false
 
+    // Grouped items for tree view
+    @Published var expandedCategories: Set<CacheCategory> = Set(CacheCategory.allCases)
+
     // Scheduler access
     @Published var hasPendingScheduledCleanup = false
+
+    /// Group cache items by category
+    var groupedCacheItems: [CacheGroup] {
+        let grouped = Dictionary(grouping: cacheItems) { $0.category }
+        return CacheCategory.allCases.compactMap { category in
+            guard let items = grouped[category], !items.isEmpty else { return nil }
+            return CacheGroup(
+                category: category,
+                items: items.sorted { $0.name < $1.name },
+                isExpanded: expandedCategories.contains(category)
+            )
+        }
+    }
 
     private let cacheService = CacheCleanerService()
     let scheduler: SchedulerService
@@ -255,6 +271,56 @@ class CacheManagerViewModel: ObservableObject {
     func updateProjectScanDepth(_ depth: Int) {
         settings.projectScanDepth = max(1, min(10, depth))
         saveSettings()
+    }
+
+    /// Toggle application cache enabled
+    func toggleApplicationCacheEnabled() {
+        settings.applicationCacheEnabled.toggle()
+        saveSettings()
+    }
+
+    /// Check if application cache type is enabled
+    func isApplicationCacheTypeEnabled(_ type: ApplicationCacheType) -> Bool {
+        settings.enabledApplicationCacheTypes.contains(type)
+    }
+
+    /// Toggle application cache type
+    func toggleApplicationCacheType(_ type: ApplicationCacheType) {
+        if let index = settings.enabledApplicationCacheTypes.firstIndex(of: type) {
+            settings.enabledApplicationCacheTypes.remove(at: index)
+        } else {
+            settings.enabledApplicationCacheTypes.append(type)
+        }
+        saveSettings()
+    }
+
+    /// Toggle scan installed apps
+    func toggleScanInstalledApps() {
+        settings.scanInstalledApps.toggle()
+        saveSettings()
+    }
+
+    /// Toggle category expansion
+    func toggleCategoryExpansion(_ category: CacheCategory) {
+        if expandedCategories.contains(category) {
+            expandedCategories.remove(category)
+        } else {
+            expandedCategories.insert(category)
+        }
+    }
+
+    /// Select all items in a category
+    func selectAllInCategory(_ category: CacheCategory) {
+        for index in cacheItems.indices where cacheItems[index].category == category {
+            cacheItems[index].isSelected = true
+        }
+    }
+
+    /// Deselect all items in a category
+    func deselectAllInCategory(_ category: CacheCategory) {
+        for index in cacheItems.indices where cacheItems[index].category == category {
+            cacheItems[index].isSelected = false
+        }
     }
 
     /// Check if project cache type is enabled

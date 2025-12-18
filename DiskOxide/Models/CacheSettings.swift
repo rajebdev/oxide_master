@@ -7,6 +7,121 @@
 
 import Foundation
 
+/// Application cache type for macOS applications
+enum ApplicationCacheType: String, Codable, CaseIterable {
+    case browsers = "Web Browsers"
+    case developerTools = "Developer Tools"
+    case messaging = "Messaging Apps"
+    case media = "Media Apps"
+    case productivity = "Productivity Apps"
+    case systemCache = "System Cache"
+
+    var displayName: String {
+        return rawValue
+    }
+
+    /// Get cache paths for this category
+    var cachePaths: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+
+        switch self {
+        case .browsers:
+            return [
+                "\(home)/Library/Caches/Google/Chrome",
+                "\(home)/Library/Caches/Firefox",
+                "\(home)/Library/Caches/com.apple.Safari",
+                "\(home)/Library/Caches/com.microsoft.edgemac",
+                "\(home)/Library/Caches/com.brave.Browser",
+                "\(home)/Library/Application Support/Google/Chrome/Default/Cache",
+                "\(home)/Library/Application Support/Firefox/Profiles/*/cache2",
+            ]
+        case .developerTools:
+            return [
+                "\(home)/Library/Developer/Xcode/DerivedData",
+                "\(home)/Library/Caches/CocoaPods",
+                "\(home)/Library/Caches/com.apple.dt.Xcode",
+                "\(home)/Library/Caches/JetBrains",
+                "\(home)/Library/Caches/Android Studio",
+                "\(home)/Library/Application Support/Code/Cache",
+                "\(home)/Library/Application Support/Code/CachedData",
+            ]
+        case .messaging:
+            return [
+                "\(home)/Library/Caches/com.tinyspeck.slackmacgap",
+                "\(home)/Library/Application Support/Slack/Cache",
+                "\(home)/Library/Application Support/discord/Cache",
+                "\(home)/Library/Caches/com.hnc.Discord",
+                "\(home)/Library/Caches/com.microsoft.teams2",
+                "\(home)/Library/Application Support/Microsoft Teams/Cache",
+            ]
+        case .media:
+            return [
+                "\(home)/Library/Caches/com.spotify.client",
+                "\(home)/Library/Caches/org.videolan.vlc",
+                "\(home)/Library/Caches/com.apple.Music",
+                "\(home)/Library/Caches/com.apple.TV",
+            ]
+        case .productivity:
+            return [
+                "\(home)/Library/Caches/com.notion.id",
+                "\(home)/Library/Caches/com.adobe.*",
+                "\(home)/Library/Caches/com.microsoft.Word",
+                "\(home)/Library/Caches/com.microsoft.Excel",
+                "\(home)/Library/Caches/com.microsoft.Powerpoint",
+            ]
+        case .systemCache:
+            return [
+                "\(home)/Library/Caches/com.apple.bird",  // iCloud
+                "\(home)/Library/Logs",
+                "\(home)/Library/Saved Application State",
+                "/Library/Caches",
+            ]
+        }
+    }
+
+    /// Get bundle identifiers for apps in this category
+    var bundleIdentifiers: [String] {
+        switch self {
+        case .browsers:
+            return [
+                "com.google.Chrome",
+                "org.mozilla.firefox",
+                "com.apple.Safari",
+                "com.microsoft.edgemac",
+                "com.brave.Browser",
+            ]
+        case .developerTools:
+            return [
+                "com.apple.dt.Xcode",
+                "com.microsoft.VSCode",
+                "com.jetbrains.intellij",
+                "com.jetbrains.pycharm",
+                "com.google.android.studio",
+            ]
+        case .messaging:
+            return [
+                "com.tinyspeck.slackmacgap",
+                "com.hnc.Discord",
+                "com.microsoft.teams2",
+            ]
+        case .media:
+            return [
+                "com.spotify.client",
+                "org.videolan.vlc",
+                "com.apple.Music",
+            ]
+        case .productivity:
+            return [
+                "com.notion.id",
+                "com.adobe.*.photoshop",
+                "com.microsoft.Word",
+            ]
+        case .systemCache:
+            return []
+        }
+    }
+}
+
 /// Project cache type for safe detection
 enum ProjectCacheType: String, Codable, CaseIterable {
     case nodeModules = "node_modules (Node.js)"
@@ -130,6 +245,11 @@ struct CacheSettings: Codable {
     var enabledProjectCacheTypes: [ProjectCacheType]
     var projectScanDepth: Int
 
+    // Application cache settings
+    var applicationCacheEnabled: Bool
+    var enabledApplicationCacheTypes: [ApplicationCacheType]
+    var scanInstalledApps: Bool  // Scan /Applications for installed apps
+
     // Scheduler settings
     var requireConfirmationForScheduledCleanup: Bool
 
@@ -143,6 +263,9 @@ struct CacheSettings: Codable {
         projectCacheEnabled: Bool = true,
         enabledProjectCacheTypes: [ProjectCacheType] = ProjectCacheType.allCases,
         projectScanDepth: Int = 100,
+        applicationCacheEnabled: Bool = true,
+        enabledApplicationCacheTypes: [ApplicationCacheType] = ApplicationCacheType.allCases,
+        scanInstalledApps: Bool = true,
         requireConfirmationForScheduledCleanup: Bool = true
     ) {
         self.parentFolders = parentFolders
@@ -154,6 +277,9 @@ struct CacheSettings: Codable {
         self.projectCacheEnabled = projectCacheEnabled
         self.enabledProjectCacheTypes = enabledProjectCacheTypes
         self.projectScanDepth = projectScanDepth
+        self.applicationCacheEnabled = applicationCacheEnabled
+        self.enabledApplicationCacheTypes = enabledApplicationCacheTypes
+        self.scanInstalledApps = scanInstalledApps
         self.requireConfirmationForScheduledCleanup = requireConfirmationForScheduledCleanup
     }
 
@@ -201,6 +327,35 @@ struct CacheSettings: Codable {
     }
 }
 
+/// Cache category for grouping
+enum CacheCategory: String, CaseIterable {
+    case systemCache = "System Cache"
+    case applicationCache = "Application Cache"
+    case projectCache = "Project Cache"
+
+    var icon: String {
+        switch self {
+        case .systemCache:
+            return "gearshape.fill"
+        case .applicationCache:
+            return "square.stack.3d.up.fill"
+        case .projectCache:
+            return "folder.badge.gearshape"
+        }
+    }
+
+    var color: String {
+        switch self {
+        case .systemCache:
+            return "orange"
+        case .applicationCache:
+            return "blue"
+        case .projectCache:
+            return "purple"
+        }
+    }
+}
+
 /// Cache item for preview before cleanup
 struct CacheItem: Identifiable, Hashable {
     let id: UUID
@@ -210,6 +365,22 @@ struct CacheItem: Identifiable, Hashable {
     let type: String  // "System Cache", "Project Cache", etc
     let lastModified: Date?
     var isSelected: Bool
+
+    /// Computed category based on type
+    var category: CacheCategory {
+        if type.starts(with: "App:") {
+            return .applicationCache
+        } else if type.contains("node_modules") || type.contains("target")
+            || type.contains("__pycache__") || type.contains("build") || type.contains("vendor")
+            || type.contains("DerivedData") || type.contains(".next") || type.contains("dist")
+            || type.contains("coverage")
+            || ProjectCacheType.allCases.map({ $0.rawValue }).contains(type)
+        {
+            return .projectCache
+        } else {
+            return .systemCache
+        }
+    }
 
     init(
         id: UUID = UUID(),
@@ -252,6 +423,34 @@ struct CacheItem: Identifiable, Hashable {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+/// Grouped cache items by category
+struct CacheGroup: Identifiable {
+    let id = UUID()
+    let category: CacheCategory
+    var items: [CacheItem]
+    var isExpanded: Bool = true
+
+    var totalSize: Int64 {
+        items.reduce(0) { $0 + $1.sizeBytes }
+    }
+
+    var selectedSize: Int64 {
+        items.filter { $0.isSelected }.reduce(0) { $0 + $1.sizeBytes }
+    }
+
+    var selectedCount: Int {
+        items.filter { $0.isSelected }.count
+    }
+
+    var formattedTotalSize: String {
+        ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
+    }
+
+    var formattedSelectedSize: String {
+        ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file)
     }
 }
 

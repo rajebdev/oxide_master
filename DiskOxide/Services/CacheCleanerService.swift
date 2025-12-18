@@ -91,14 +91,172 @@ class CacheCleanerService {
             let projectCaches = try await scanProjectCacheItems(
                 settings: settings,
                 progressHandler: { prog, msg in
-                    progressHandler(0.5 + (prog * 0.5), msg)
+                    progressHandler(0.5 + (prog * 0.3), msg)
                 }
             )
             cacheItems.append(contentsOf: projectCaches)
         }
 
+        progressHandler(0.8, "Scanning application caches...")
+
+        // Scan application cache folders if enabled
+        if settings.applicationCacheEnabled {
+            let appCaches = try await scanApplicationCacheItems(
+                settings: settings,
+                progressHandler: { prog, msg in
+                    progressHandler(0.8 + (prog * 0.2), msg)
+                }
+            )
+            cacheItems.append(contentsOf: appCaches)
+        }
+
         progressHandler(1.0, "Scan complete")
         return cacheItems
+    }
+
+    /// Scan for application cache items
+    private func scanApplicationCacheItems(
+        settings: CacheSettings,
+        progressHandler: @escaping (Double, String) -> Void
+    ) async throws -> [CacheItem] {
+        var appCaches: [CacheItem] = []
+        let totalTypes = settings.enabledApplicationCacheTypes.count
+
+        for (index, cacheType) in settings.enabledApplicationCacheTypes.enumerated() {
+            let progress = Double(index) / Double(totalTypes)
+            progressHandler(progress, "Scanning \(cacheType.displayName)...")
+
+            // Scan each cache path for this type
+            for cachePath in cacheType.cachePaths {
+                // Handle wildcard patterns
+                if cachePath.contains("*") {
+                    let caches = try await scanWildcardPath(cachePath)
+                    appCaches.append(
+                        contentsOf: caches.map { path, size in
+                            CacheItem(
+                                path: path,
+                                name: (path as NSString).lastPathComponent,
+                                sizeBytes: size,
+                                type: "App: \(cacheType.displayName)"
+                            )
+                        })
+                } else {
+                    // Expand tilde
+                    let expandedPath = (cachePath as NSString).expandingTildeInPath
+
+                    if fileManager.fileExists(atPath: expandedPath) {
+                        if let size = try? await getFolderSize(at: expandedPath) {
+                            let item = CacheItem(
+                                path: expandedPath,
+                                name: (expandedPath as NSString).lastPathComponent,
+                                sizeBytes: size,
+                                type: "App: \(cacheType.displayName)"
+                            )
+                            appCaches.append(item)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Scan installed apps if enabled
+        if settings.scanInstalledApps {
+            progressHandler(0.9, "Scanning installed applications...")
+            let installedAppCaches = try await scanInstalledApplications(settings: settings)
+            appCaches.append(contentsOf: installedAppCaches)
+        }
+
+        progressHandler(1.0, "Application cache scan complete")
+        return appCaches
+    }
+
+    /// Scan for cache from installed applications
+    private func scanInstalledApplications(settings: CacheSettings) async throws -> [CacheItem] {
+        var appCaches: [CacheItem] = []
+        let applicationsPath = "/Applications"
+        let home = fileManager.homeDirectoryForCurrentUser.path
+        let userCachePath = "\(home)/Library/Caches"
+
+        guard let apps = try? fileManager.contentsOfDirectory(atPath: applicationsPath) else {
+            return []
+        }
+
+        // Get all app bundle identifiers
+        var appBundleIds: [String: String] = [:]  // [bundleId: appName]
+
+        for app in apps where app.hasSuffix(".app") {
+            let appPath = "\(applicationsPath)/\(app)"
+            let infoPlistPath = "\(appPath)/Contents/Info.plist"
+
+            if fileManager.fileExists(atPath: infoPlistPath),
+                let plistData = fileManager.contents(atPath: infoPlistPath),
+                let plist = try? PropertyListSerialization.propertyList(
+                    from: plistData,
+                    options: [],
+                    format: nil
+                ) as? [String: Any],
+                let bundleId = plist["CFBundleIdentifier"] as? String
+            {
+                let appName = (app as NSString).deletingPathExtension
+                appBundleIds[bundleId] = appName
+            }
+        }
+
+        // Find caches for each app
+        for (bundleId, appName) in appBundleIds {
+            let cachePath = "\(userCachePath)/\(bundleId)"
+
+            if fileManager.fileExists(atPath: cachePath) {
+                if let size = try? await getFolderSize(at: cachePath), size > 0 {
+                    let item = CacheItem(
+                        path: cachePath,
+                        name: "\(appName) Cache",
+                        sizeBytes: size,
+                        type: "App: \(appName)"
+                    )
+                    appCaches.append(item)
+                }
+            }
+        }
+
+        return appCaches
+    }
+
+    /// Scan paths with wildcards
+    private func scanWildcardPath(_ pattern: String) async throws -> [(path: String, size: Int64)] {
+        var results: [(String, Int64)] = []
+        let expandedPattern = (pattern as NSString).expandingTildeInPath
+        let components = expandedPattern.components(separatedBy: "*")
+
+        guard components.count == 2 else { return [] }
+
+        let basePath = components[0].trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let suffix = components[1]
+
+        let baseURL = URL(fileURLWithPath: basePath)
+
+        guard
+            let contents = try? fileManager.contentsOfDirectory(
+                at: baseURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return []
+        }
+
+        for itemURL in contents {
+            let itemPath = itemURL.path
+            if suffix.isEmpty || itemPath.hasSuffix(suffix) {
+                if fileManager.fileExists(atPath: itemPath) {
+                    if let size = try? await getFolderSize(at: itemPath), size > 0 {
+                        results.append((itemPath, size))
+                    }
+                }
+            }
+        }
+
+        return results
     }
 
     /// Scan for project cache items
@@ -333,9 +491,18 @@ class CacheCleanerService {
             progressHandler(progress, "Deleting \(item.name)...")
 
             do {
-                // Move to trash instead of deleting
                 let url = URL(fileURLWithPath: item.path)
-                try fileManager.trashItem(at: url, resultingItemURL: nil)
+
+                // Determine cleanup behavior based on category
+                switch item.category {
+                case .applicationCache, .projectCache:
+                    // Delete entire folder for app and project cache
+                    try fileManager.trashItem(at: url, resultingItemURL: nil)
+
+                case .systemCache:
+                    // Delete only contents for system cache (safer)
+                    try deleteDirectoryContents(at: item.path)
+                }
 
                 let record = CleanupRecord(
                     filePath: item.path,
@@ -706,6 +873,25 @@ class CacheCleanerService {
         }
 
         return oldFiles
+    }
+
+    /// Delete only the contents of a directory, keeping the directory itself
+    private func deleteDirectoryContents(at path: String) throws {
+        let url = URL(fileURLWithPath: path)
+
+        guard
+            let contents = try? fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: nil,
+                options: []
+            )
+        else {
+            return
+        }
+
+        for itemURL in contents {
+            try fileManager.trashItem(at: itemURL, resultingItemURL: nil)
+        }
     }
 
     /// Send notification about cleanup
