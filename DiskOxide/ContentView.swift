@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab: Tab = .analyzer
+    @State private var selectedTab: Tab = .installer
 
     enum Tab {
         case analyzer
