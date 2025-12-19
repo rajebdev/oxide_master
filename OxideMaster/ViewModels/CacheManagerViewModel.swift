@@ -235,6 +235,62 @@ class CacheManagerViewModel: ObservableObject {
         saveSettings()
     }
 
+    /// Add project scan location
+    func addProjectScanLocation(_ location: String) {
+        if !settings.projectScanLocations.contains(location) {
+            settings.projectScanLocations.append(location)
+            saveSettings()
+        }
+    }
+
+    /// Remove project scan location
+    func removeProjectScanLocation(at index: Int) {
+        settings.projectScanLocations.remove(at: index)
+        saveSettings()
+    }
+
+    /// Add project scan exclusion
+    func addProjectScanExclusion(_ exclusion: String) {
+        if !settings.projectScanExclusions.contains(exclusion) {
+            settings.projectScanExclusions.append(exclusion)
+            saveSettings()
+        }
+    }
+
+    /// Remove project scan exclusion
+    func removeProjectScanExclusion(at index: Int) {
+        settings.projectScanExclusions.remove(at: index)
+        saveSettings()
+    }
+
+    /// Add system cache exclusion
+    func addSystemCacheExclusion(_ exclusion: String) {
+        if !settings.systemCacheExclusions.contains(exclusion) {
+            settings.systemCacheExclusions.append(exclusion)
+            saveSettings()
+        }
+    }
+
+    /// Remove system cache exclusion
+    func removeSystemCacheExclusion(at index: Int) {
+        settings.systemCacheExclusions.remove(at: index)
+        saveSettings()
+    }
+
+    /// Add application cache exclusion
+    func addApplicationCacheExclusion(_ exclusion: String) {
+        if !settings.applicationCacheExclusions.contains(exclusion) {
+            settings.applicationCacheExclusions.append(exclusion)
+            saveSettings()
+        }
+    }
+
+    /// Remove application cache exclusion
+    func removeApplicationCacheExclusion(at index: Int) {
+        settings.applicationCacheExclusions.remove(at: index)
+        saveSettings()
+    }
+
     /// Update age threshold
     func updateAgeThreshold(_ hours: Int) {
         settings.ageThresholdHours = max(1, hours)
@@ -360,6 +416,12 @@ class CacheManagerViewModel: ObservableObject {
     /// Toggle require confirmation for scheduled cleanup
     func toggleRequireConfirmation() {
         settings.requireConfirmationForScheduledCleanup.toggle()
+        saveSettings()
+    }
+
+    /// Toggle system cache enabled
+    func toggleSystemCacheEnabled() {
+        settings.systemCacheEnabled.toggle()
         saveSettings()
     }
 

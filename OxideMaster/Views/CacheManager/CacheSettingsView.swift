@@ -12,6 +12,10 @@ struct CacheSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var newParentFolder = ""
     @State private var newCacheFolderName = ""
+    @State private var newProjectScanLocation = ""
+    @State private var newProjectScanExclusion = ""
+    @State private var newSystemCacheExclusion = ""
+    @State private var newApplicationCacheExclusion = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,74 +38,6 @@ struct CacheSettingsView: View {
 
             // Settings content
             Form {
-                // Parent folders
-                Section("Parent Folders to Scan") {
-                    List {
-                        ForEach(Array(viewModel.settings.parentFolders.enumerated()), id: \.offset)
-                        { index, folder in
-                            HStack {
-                                Text(folder)
-                                    .font(.caption)
-                                Spacer()
-                                Button(action: {
-                                    viewModel.removeParentFolder(at: index)
-                                }) {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundColor(.red)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    HStack {
-                        TextField("Add parent folder path", text: $newParentFolder)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button("Add") {
-                            if !newParentFolder.isEmpty {
-                                viewModel.addParentFolder(newParentFolder)
-                                newParentFolder = ""
-                            }
-                        }
-                        .disabled(newParentFolder.isEmpty)
-                    }
-                }
-
-                // Cache folder names
-                Section("Cache Folder Names to Match") {
-                    List {
-                        ForEach(
-                            Array(viewModel.settings.cacheFolderNames.enumerated()), id: \.offset
-                        ) { index, name in
-                            HStack {
-                                Text(name)
-                                Spacer()
-                                Button(action: {
-                                    viewModel.removeCacheFolderName(at: index)
-                                }) {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundColor(.red)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    HStack {
-                        TextField("Add cache folder name", text: $newCacheFolderName)
-                            .textFieldStyle(.roundedBorder)
-
-                        Button("Add") {
-                            if !newCacheFolderName.isEmpty {
-                                viewModel.addCacheFolderName(newCacheFolderName)
-                                newCacheFolderName = ""
-                            }
-                        }
-                        .disabled(newCacheFolderName.isEmpty)
-                    }
-                }
-
                 // Thresholds
                 Section("Cleanup Thresholds") {
                     HStack {
@@ -172,6 +108,136 @@ struct CacheSettingsView: View {
                     }
                 }
 
+                // System Cache Cleaning
+                Section {
+                    Toggle(
+                        "Enable System Cache Cleaning",
+                        isOn: .init(
+                            get: { viewModel.settings.systemCacheEnabled },
+                            set: { _ in viewModel.toggleSystemCacheEnabled() }
+                        )
+                    )
+                    .toggleStyle(.switch)
+                    .tint(Constants.Colors.primaryColor)
+
+                    Text("Clean generic cache folders in Library and system directories")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Label(
+                        "System Cache Cleaning", systemImage: "folder.badge.gearshape")
+                }
+
+                if viewModel.settings.systemCacheEnabled {
+                    // Parent folders
+                    Section("Parent Folders to Scan") {
+                        List {
+                            ForEach(
+                                Array(viewModel.settings.parentFolders.enumerated()), id: \.offset
+                            ) { index, folder in
+                                HStack {
+                                    Text(folder)
+                                        .font(.caption)
+                                    Spacer()
+                                    Button(action: {
+                                        viewModel.removeParentFolder(at: index)
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add parent folder path", text: $newParentFolder)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Add") {
+                                if !newParentFolder.isEmpty {
+                                    viewModel.addParentFolder(newParentFolder)
+                                    newParentFolder = ""
+                                }
+                            }
+                            .disabled(newParentFolder.isEmpty)
+                        }
+                    }
+
+                    // Cache folder names
+                    Section("Cache Folder Names to Match") {
+                        List {
+                            ForEach(
+                                Array(viewModel.settings.cacheFolderNames.enumerated()),
+                                id: \.offset
+                            ) { index, name in
+                                HStack {
+                                    Text(name)
+                                    Spacer()
+                                    Button(action: {
+                                        viewModel.removeCacheFolderName(at: index)
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add cache folder name", text: $newCacheFolderName)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Add") {
+                                if !newCacheFolderName.isEmpty {
+                                    viewModel.addCacheFolderName(newCacheFolderName)
+                                    newCacheFolderName = ""
+                                }
+                            }
+                            .disabled(newCacheFolderName.isEmpty)
+                        }
+                    }
+
+                    // System cache exclusions
+                    Section("Exclude from System Cache Scan") {
+                        List {
+                            ForEach(viewModel.settings.systemCacheExclusions.indices, id: \.self) {
+                                index in
+                                HStack {
+                                    Text(viewModel.settings.systemCacheExclusions[index])
+                                        .font(.caption)
+                                    Spacer()
+                                    Button(action: {
+                                        viewModel.removeSystemCacheExclusion(at: index)
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add exclusion path", text: $newSystemCacheExclusion)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Add") {
+                                if !newSystemCacheExclusion.isEmpty {
+                                    viewModel.addSystemCacheExclusion(newSystemCacheExclusion)
+                                    newSystemCacheExclusion = ""
+                                }
+                            }
+                            .disabled(newSystemCacheExclusion.isEmpty)
+                        }
+
+                        Text("Critical system caches (iCloud, authentication, etc.)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 // Project Cache Cleaning
                 Section {
                     Toggle(
@@ -193,6 +259,97 @@ struct CacheSettingsView: View {
                 }
 
                 if viewModel.settings.projectCacheEnabled {
+                    // Project scan locations
+                    Section("Project Scan Locations") {
+                        List {
+                            ForEach(viewModel.settings.projectScanLocations.indices, id: \.self) {
+                                index in
+                                HStack {
+                                    Text(viewModel.settings.projectScanLocations[index])
+                                        .font(.caption)
+                                    Spacer()
+                                    Button(action: {
+                                        viewModel.removeProjectScanLocation(at: index)
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add project scan location", text: $newProjectScanLocation)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Add") {
+                                if !newProjectScanLocation.isEmpty {
+                                    viewModel.addProjectScanLocation(newProjectScanLocation)
+                                    newProjectScanLocation = ""
+                                }
+                            }
+                            .disabled(newProjectScanLocation.isEmpty)
+                        }
+
+                        Text("Folders where projects will be scanned recursively")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    // Project scan exclusions
+                    Section("Exclude from Scan") {
+                        List {
+                            ForEach(viewModel.settings.projectScanExclusions.indices, id: \.self) {
+                                index in
+                                HStack {
+                                    Text(viewModel.settings.projectScanExclusions[index])
+                                        .font(.caption)
+                                    Spacer()
+                                    Button(action: {
+                                        viewModel.removeProjectScanExclusion(at: index)
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add exclusion path", text: $newProjectScanExclusion)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Add") {
+                                if !newProjectScanExclusion.isEmpty {
+                                    viewModel.addProjectScanExclusion(newProjectScanExclusion)
+                                    newProjectScanExclusion = ""
+                                }
+                            }
+                            .disabled(newProjectScanExclusion.isEmpty)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Paths to skip during scan to prevent accidental deletion")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label(
+                                    "Package manager caches (go/pkg, .cargo, .npm)",
+                                    systemImage: "shield.fill")
+                                Label(
+                                    "System folders (/Library, /System)", systemImage: "shield.fill"
+                                )
+                                Label("Version control (.git, .svn)", systemImage: "shield.fill")
+                            }
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     Section("Project Types to Clean") {
                         ForEach(ProjectCacheType.allCases, id: \.self) { cacheType in
                             HStack {
@@ -348,6 +505,46 @@ struct CacheSettingsView: View {
                             .foregroundColor(.secondary)
                         }
                         .padding(.vertical, 4)
+                    }
+
+                    // Application cache exclusions
+                    Section("Exclude from Application Cache Scan") {
+                        List {
+                            ForEach(
+                                viewModel.settings.applicationCacheExclusions.indices, id: \.self
+                            ) { index in
+                                HStack {
+                                    Text(viewModel.settings.applicationCacheExclusions[index])
+                                        .font(.caption)
+                                    Spacer()
+                                    Button(action: {
+                                        viewModel.removeApplicationCacheExclusion(at: index)
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack {
+                            TextField("Add exclusion path", text: $newApplicationCacheExclusion)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Add") {
+                                if !newApplicationCacheExclusion.isEmpty {
+                                    viewModel.addApplicationCacheExclusion(
+                                        newApplicationCacheExclusion)
+                                    newApplicationCacheExclusion = ""
+                                }
+                            }
+                            .disabled(newApplicationCacheExclusion.isEmpty)
+                        }
+
+                        Text("Critical app data (App Store, Photos, authentication)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             }

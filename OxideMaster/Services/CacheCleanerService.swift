@@ -59,26 +59,40 @@ class CacheCleanerService {
         progressHandler(0.0, "Scanning cache folders...")
 
         // Scan regular cache folders
-        for (index, parentFolder) in settings.parentFolders.enumerated() {
-            let progress = Double(index) / Double(settings.parentFolders.count) * 0.5
-            progressHandler(progress, "Scanning \(parentFolder)...")
+        if settings.systemCacheEnabled {
+            for (index, parentFolder) in settings.parentFolders.enumerated() {
+                let progress = Double(index) / Double(settings.parentFolders.count) * 0.5
+                progressHandler(progress, "Scanning \(parentFolder)...")
 
-            guard fileManager.fileExists(atPath: parentFolder) else { continue }
+                guard fileManager.fileExists(atPath: parentFolder) else { continue }
 
-            let parentURL = URL(fileURLWithPath: parentFolder)
+                let parentURL = URL(fileURLWithPath: parentFolder)
 
-            for cacheFolderName in settings.cacheFolderNames {
-                let cacheURL = parentURL.appendingPathComponent(cacheFolderName)
+                for cacheFolderName in settings.cacheFolderNames {
+                    let cacheURL = parentURL.appendingPathComponent(cacheFolderName)
+                    let cachePath = cacheURL.path
 
-                if fileManager.fileExists(atPath: cacheURL.path) {
-                    if let size = try? await getFolderSize(at: cacheURL.path) {
-                        let item = CacheItem(
-                            path: cacheURL.path,
-                            name: cacheFolderName,
-                            sizeBytes: size,
-                            type: "System Cache"
-                        )
-                        cacheItems.append(item)
+                    // Check if path is in exclusion list
+                    var isExcluded = false
+                    for exclusion in settings.systemCacheExclusions {
+                        if cachePath.hasPrefix(exclusion) || cachePath.contains(exclusion) {
+                            isExcluded = true
+                            break
+                        }
+                    }
+
+                    if isExcluded { continue }
+
+                    if fileManager.fileExists(atPath: cachePath) {
+                        if let size = try? await getFolderSize(at: cachePath) {
+                            let item = CacheItem(
+                                path: cachePath,
+                                name: cacheFolderName,
+                                sizeBytes: size,
+                                type: "System Cache"
+                            )
+                            cacheItems.append(item)
+                        }
                     }
                 }
             }
@@ -132,8 +146,14 @@ class CacheCleanerService {
                 if cachePath.contains("*") {
                     let caches = try await scanWildcardPath(cachePath)
                     appCaches.append(
-                        contentsOf: caches.map { path, size in
-                            CacheItem(
+                        contentsOf: caches.compactMap { path, size in
+                            // Check if path is in exclusion list
+                            for exclusion in settings.applicationCacheExclusions {
+                                if path.hasPrefix(exclusion) || path.contains(exclusion) {
+                                    return nil
+                                }
+                            }
+                            return CacheItem(
                                 path: path,
                                 name: (path as NSString).lastPathComponent,
                                 sizeBytes: size,
@@ -143,6 +163,17 @@ class CacheCleanerService {
                 } else {
                     // Expand tilde
                     let expandedPath = (cachePath as NSString).expandingTildeInPath
+
+                    // Check if path is in exclusion list
+                    var isExcluded = false
+                    for exclusion in settings.applicationCacheExclusions {
+                        if expandedPath.hasPrefix(exclusion) || expandedPath.contains(exclusion) {
+                            isExcluded = true
+                            break
+                        }
+                    }
+
+                    if isExcluded { continue }
 
                     if fileManager.fileExists(atPath: expandedPath) {
                         if let size = try? await getFolderSize(at: expandedPath) {
@@ -206,6 +237,17 @@ class CacheCleanerService {
         for (bundleId, appName) in appBundleIds {
             let cachePath = "\(userCachePath)/\(bundleId)"
 
+            // Check if path is in exclusion list
+            var isExcluded = false
+            for exclusion in settings.applicationCacheExclusions {
+                if cachePath.hasPrefix(exclusion) || cachePath.contains(exclusion) {
+                    isExcluded = true
+                    break
+                }
+            }
+
+            if isExcluded { continue }
+
             if fileManager.fileExists(atPath: cachePath) {
                 if let size = try? await getFolderSize(at: cachePath), size > 0 {
                     let item = CacheItem(
@@ -266,15 +308,8 @@ class CacheCleanerService {
     ) async throws -> [CacheItem] {
         var projectCaches: [CacheItem] = []
         var addedPaths: Set<String> = []
-        let homeDir = fileManager.homeDirectoryForCurrentUser.path
 
-        let projectLocations = [
-            "\(homeDir)/Documents",
-            "\(homeDir)/Projects",
-            "\(homeDir)/Developer",
-            "\(homeDir)/workspace",
-            "\(homeDir)/code",
-        ]
+        let projectLocations = settings.projectScanLocations
 
         for (index, location) in projectLocations.enumerated() {
             let progress = Double(index) / Double(projectLocations.count)
@@ -287,7 +322,8 @@ class CacheCleanerService {
                 depth: 0,
                 maxDepth: settings.projectScanDepth,
                 enabledTypes: settings.enabledProjectCacheTypes,
-                addedPaths: &addedPaths
+                addedPaths: &addedPaths,
+                exclusions: settings.projectScanExclusions
             )
             projectCaches.append(contentsOf: caches)
         }
@@ -301,12 +337,20 @@ class CacheCleanerService {
         depth: Int,
         maxDepth: Int,
         enabledTypes: [ProjectCacheType],
-        addedPaths: inout Set<String>
+        addedPaths: inout Set<String>,
+        exclusions: [String] = []
     ) async throws -> [CacheItem] {
         guard depth < maxDepth else { return [] }
 
-        // Check if current path is already inside an added parent
+        // Check if current path is in exclusion list
         let currentPath = path
+        for exclusion in exclusions {
+            if currentPath.hasPrefix(exclusion) || currentPath.contains(exclusion) {
+                return []
+            }
+        }
+
+        // Check if current path is already inside an added parent
         for addedPath in addedPaths {
             if currentPath.hasPrefix(addedPath + "/") || currentPath == addedPath {
                 // This path is inside an already added parent, skip it
@@ -386,7 +430,8 @@ class CacheCleanerService {
                 depth: depth + 1,
                 maxDepth: maxDepth,
                 enabledTypes: enabledTypes,
-                addedPaths: &addedPaths
+                addedPaths: &addedPaths,
+                exclusions: exclusions
             )
             foundCaches.append(contentsOf: subCaches)
         }
@@ -609,16 +654,9 @@ class CacheCleanerService {
     private func scanProjectCaches(settings: CacheSettings) async throws -> [FileInfo] {
         var projectCaches: [FileInfo] = []
         var addedPaths: Set<String> = []
-        let homeDir = fileManager.homeDirectoryForCurrentUser.path
 
-        // Start from common project locations
-        let projectLocations = [
-            "\(homeDir)/Documents",
-            "\(homeDir)/Projects",
-            "\(homeDir)/Developer",
-            "\(homeDir)/workspace",
-            "\(homeDir)/code",
-        ]
+        // Start from configured project locations
+        let projectLocations = settings.projectScanLocations
 
         for location in projectLocations {
             guard fileManager.fileExists(atPath: location) else { continue }
@@ -628,7 +666,8 @@ class CacheCleanerService {
                 depth: 0,
                 maxDepth: settings.projectScanDepth,
                 enabledTypes: settings.enabledProjectCacheTypes,
-                addedPaths: &addedPaths
+                addedPaths: &addedPaths,
+                exclusions: settings.projectScanExclusions
             )
             projectCaches.append(contentsOf: caches)
         }
@@ -642,12 +681,20 @@ class CacheCleanerService {
         depth: Int,
         maxDepth: Int,
         enabledTypes: [ProjectCacheType],
-        addedPaths: inout Set<String>
+        addedPaths: inout Set<String>,
+        exclusions: [String] = []
     ) async throws -> [FileInfo] {
         guard depth < maxDepth else { return [] }
 
-        // Check if current path is already inside an added parent
+        // Check if current path is in exclusion list
         let currentPath = path
+        for exclusion in exclusions {
+            if currentPath.hasPrefix(exclusion) || currentPath.contains(exclusion) {
+                return []
+            }
+        }
+
+        // Check if current path is already inside an added parent
         for addedPath in addedPaths {
             if currentPath.hasPrefix(addedPath + "/") || currentPath == addedPath {
                 // This path is inside an already added parent, skip it
@@ -720,7 +767,8 @@ class CacheCleanerService {
                 depth: depth + 1,
                 maxDepth: maxDepth,
                 enabledTypes: enabledTypes,
-                addedPaths: &addedPaths
+                addedPaths: &addedPaths,
+                exclusions: exclusions
             )
             foundCaches.append(contentsOf: subCaches)
         }

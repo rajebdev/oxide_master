@@ -240,15 +240,22 @@ struct CacheSettings: Codable {
     var enabled: Bool
     var lastCleanupDate: Date?
 
+    // System cache settings
+    var systemCacheEnabled: Bool
+    var systemCacheExclusions: [String]
+
     // Project cache settings
     var projectCacheEnabled: Bool
     var enabledProjectCacheTypes: [ProjectCacheType]
     var projectScanDepth: Int
+    var projectScanLocations: [String]
+    var projectScanExclusions: [String]
 
     // Application cache settings
     var applicationCacheEnabled: Bool
     var enabledApplicationCacheTypes: [ApplicationCacheType]
     var scanInstalledApps: Bool  // Scan /Applications for installed apps
+    var applicationCacheExclusions: [String]
 
     // Scheduler settings
     var requireConfirmationForScheduledCleanup: Bool
@@ -260,12 +267,17 @@ struct CacheSettings: Codable {
         intervalHours: Int = 24,
         enabled: Bool = true,
         lastCleanupDate: Date? = nil,
+        systemCacheEnabled: Bool = true,
+        systemCacheExclusions: [String] = CacheSettings.defaultSystemCacheExclusions,
         projectCacheEnabled: Bool = true,
         enabledProjectCacheTypes: [ProjectCacheType] = ProjectCacheType.allCases,
         projectScanDepth: Int = 100,
+        projectScanLocations: [String] = CacheSettings.defaultProjectScanLocations,
+        projectScanExclusions: [String] = CacheSettings.defaultProjectScanExclusions,
         applicationCacheEnabled: Bool = true,
         enabledApplicationCacheTypes: [ApplicationCacheType] = ApplicationCacheType.allCases,
         scanInstalledApps: Bool = true,
+        applicationCacheExclusions: [String] = CacheSettings.defaultApplicationCacheExclusions,
         requireConfirmationForScheduledCleanup: Bool = true
     ) {
         self.parentFolders = parentFolders
@@ -274,12 +286,17 @@ struct CacheSettings: Codable {
         self.intervalHours = intervalHours
         self.enabled = enabled
         self.lastCleanupDate = lastCleanupDate
+        self.systemCacheEnabled = systemCacheEnabled
+        self.systemCacheExclusions = systemCacheExclusions
         self.projectCacheEnabled = projectCacheEnabled
         self.enabledProjectCacheTypes = enabledProjectCacheTypes
         self.projectScanDepth = projectScanDepth
+        self.projectScanLocations = projectScanLocations
+        self.projectScanExclusions = projectScanExclusions
         self.applicationCacheEnabled = applicationCacheEnabled
         self.enabledApplicationCacheTypes = enabledApplicationCacheTypes
         self.scanInstalledApps = scanInstalledApps
+        self.applicationCacheExclusions = applicationCacheExclusions
         self.requireConfirmationForScheduledCleanup = requireConfirmationForScheduledCleanup
     }
 
@@ -293,6 +310,74 @@ struct CacheSettings: Codable {
         ]
     }
 
+    static var defaultProjectScanLocations: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            home
+        ]
+    }
+    static var defaultSystemCacheExclusions: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            // Critical system folders
+            "/System/Library/Caches/com.apple.iconservices.store",
+            "/System/Library/Caches/com.apple.Metal",
+            "\(home)/Library/Caches/com.apple.bird",  // iCloud sync
+            "\(home)/Library/Caches/CloudKit",
+            "\(home)/Library/Caches/com.apple.accountsd",
+            "\(home)/Library/Application Support/com.apple.sharedfilelist",
+        ]
+    }
+
+    static var defaultProjectScanExclusions: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            // Package manager global caches (should NOT be deleted)
+            "\(home)/go/pkg",
+            "\(home)/.cargo/registry",
+            "\(home)/.cargo/git",
+            "\(home)/.npm",
+            "\(home)/.yarn",
+            "\(home)/.pnpm-store",
+            "\(home)/.m2/repository",
+            "\(home)/.gradle/caches",
+            "\(home)/.gradle/wrapper",
+            "\(home)/.ivy2",
+            "\(home)/.pub-cache",
+            "\(home)/.nuget",
+            "\(home)/.composer",
+            "\(home)/.gem",
+            "\(home)/.bundler",
+            "\(home)/.hex",
+            "\(home)/.mix",
+            "\(home)/.stack",
+            "\(home)/.cabal",
+
+            // System and Library folders
+            "/Library",
+            "/System",
+            "\(home)/Library",
+            "\(home)/.local/share",
+            "\(home)/.cache",
+
+            // Version control
+            ".git",
+            ".svn",
+            ".hg",
+        ]
+    }
+
+    static var defaultApplicationCacheExclusions: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            // Critical app data that shouldn't be deleted
+            "\(home)/Library/Caches/com.apple.akd",  // Apple authentication
+            "\(home)/Library/Caches/com.apple.appstore",  // App Store
+            "\(home)/Library/Caches/com.apple.LaunchServices",
+            "\(home)/Library/Caches/com.apple.photoanalysisd",  // Photos
+            "\(home)/Library/Caches/com.apple.iCloudHelper",
+        ]
+    }
     static var defaultCacheFolders: [String] {
         [
             "Cache",
