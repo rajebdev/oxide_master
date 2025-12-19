@@ -1,6 +1,6 @@
 //
 //  SyncSession.swift
-//  OxideMaster
+//  DiskOxide
 //
 //  Created on 2025-12-17.
 //
