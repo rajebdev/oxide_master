@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AppInstallerView: View {
-    @StateObject private var viewModel = AppInstallerViewModel()
+    @ObservedObject var viewModel: AppInstallerViewModel
     @State private var selectedApp: HomebrewApp?
 
     var body: some View {
@@ -476,7 +476,7 @@ struct BrewAppRowView: View {
 
 struct AppInstallerView_Previews: PreviewProvider {
     static var previews: some View {
-        AppInstallerView()
+        AppInstallerView(viewModel: AppInstallerViewModel())
             .frame(width: 900, height: 700)
     }
 }

@@ -9,7 +9,7 @@ import AppKit
 import SwiftUI
 
 struct BackupManagerView: View {
-    @StateObject private var viewModel = BackupManagerViewModel()
+    @ObservedObject var viewModel: BackupManagerViewModel
     @State private var showingHistory = false
 
     var body: some View {

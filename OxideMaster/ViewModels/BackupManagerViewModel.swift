@@ -21,6 +21,9 @@ class BackupManagerViewModel: ObservableObject {
     @Published var lastBackupRecord: BackupRecord?
     @Published var previewResult: BackupPreviewResult?
 
+    // Track first appearance for auto-scan
+    @Published var hasPerformedInitialScan = false
+
     private let backupService = BackupService()
 
     init() {

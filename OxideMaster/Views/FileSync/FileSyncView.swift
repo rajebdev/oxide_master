@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct FileSyncView: View {
-    @StateObject private var viewModel = FileSyncViewModel()
+    @ObservedObject var viewModel: FileSyncViewModel
     @State private var showingSaveSession = false
     @State private var sessionName = ""
 

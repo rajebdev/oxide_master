@@ -16,6 +16,9 @@ class AppUninstallerViewModel: ObservableObject {
     @Published var showError = false
     @Published var groupBySource = true
 
+    // Track first appearance for auto-scan
+    @Published var hasPerformedInitialScan = false
+
     private let service = AppUninstallerService.shared
 
     var groupedApps: [AppInfo.AppSource: [AppInfo]] {

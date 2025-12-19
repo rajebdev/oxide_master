@@ -54,6 +54,9 @@ class FileSyncViewModel: ObservableObject {
     @Published var rightSortOption: SortOption = .name
     @Published var rightSortOrder: SortOrder = .ascending
 
+    // Track first appearance for auto-scan
+    @Published var hasPerformedInitialScan = false
+
     private let fileOps = FileOperationsService()
     private let sessionManager = SyncSessionManager.shared
     @Published var showSetup = true

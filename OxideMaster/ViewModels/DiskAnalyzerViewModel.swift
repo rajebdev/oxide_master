@@ -24,8 +24,24 @@ class DiskAnalyzerViewModel: ObservableObject {
     @Published var calculatedItemsCount: Int = 0
     @Published var totalItemsCount: Int = 0
 
+    // Track first appearance for auto-scan
+    @Published var hasPerformedInitialScan = false
+
     private let fileScanner = FileScanner.self
     private let fileOps = FileOperationsService()
+
+    // Persisted last scan directory
+    private let lastScanDirKey = "lastScanDirectory"
+
+    var lastScanDirectory: String {
+        get {
+            UserDefaults.standard.string(forKey: lastScanDirKey)
+                ?? FileManager.default.homeDirectoryForCurrentUser.path
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: lastScanDirKey)
+        }
+    }
 
     enum SortOrder {
         case name, size, date
@@ -35,6 +51,16 @@ class DiskAnalyzerViewModel: ObservableObject {
         case list, tree, treeMap
     }
 
+    /// Perform initial auto-scan on first appearance
+    func performInitialScanIfNeeded() async {
+        guard !hasPerformedInitialScan else { return }
+        hasPerformedInitialScan = true
+
+        // Use last scan directory or home directory
+        let pathToScan = lastScanDirectory
+        await scanDirectory(path: pathToScan)
+    }
+
     /// Scan directory with progressive loading
     func scanDirectory(path: String) async {
         guard !isScanning else { return }
@@ -42,6 +68,7 @@ class DiskAnalyzerViewModel: ObservableObject {
         isScanning = true
         errorMessage = nil
         currentPath = path
+        lastScanDirectory = path  // Save last scanned directory
         scanProgress = 0.0
         calculatedItemsCount = 0
         scanMessage = "Loading structure..."

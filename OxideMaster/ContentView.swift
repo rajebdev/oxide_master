@@ -10,6 +10,14 @@ import SwiftUI
 struct ContentView: View {
     @State private var selectedTab: Tab = .installer
 
+    // Persisted ViewModels - survive tab switches
+    @StateObject private var diskAnalyzerVM = DiskAnalyzerViewModel()
+    @StateObject private var backupManagerVM = BackupManagerViewModel()
+    @StateObject private var fileSyncVM = FileSyncViewModel()
+    @StateObject private var cacheManagerVM = CacheManagerViewModel()
+    @StateObject private var appUninstallerVM = AppUninstallerViewModel()
+    @StateObject private var appInstallerVM = AppInstallerViewModel()
+
     enum Tab {
         case analyzer
         case backup
@@ -38,17 +46,17 @@ struct ContentView: View {
                 Group {
                     switch selectedTab {
                     case .analyzer:
-                        DiskAnalyzerView()
+                        DiskAnalyzerView(viewModel: diskAnalyzerVM)
                     case .backup:
-                        BackupManagerView()
+                        BackupManagerView(viewModel: backupManagerVM)
                     case .fileSync:
-                        FileSyncView()
+                        FileSyncView(viewModel: fileSyncVM)
                     case .cache:
-                        CacheManagerView()
+                        CacheManagerView(viewModel: cacheManagerVM)
                     case .uninstaller:
-                        AppUninstallerView()
+                        AppUninstallerView(viewModel: appUninstallerVM)
                     case .installer:
-                        AppInstallerView()
+                        AppInstallerView(viewModel: appInstallerVM)
                     case .about:
                         AboutView()
                     }

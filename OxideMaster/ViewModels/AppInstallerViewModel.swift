@@ -18,6 +18,9 @@ class AppInstallerViewModel: ObservableObject {
     @Published var showError = false
     @Published var homebrewInstalled = true
 
+    // Track first appearance for auto-scan
+    @Published var hasPerformedInitialScan = false
+
     private let service = HomebrewService.shared
     private var searchTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?

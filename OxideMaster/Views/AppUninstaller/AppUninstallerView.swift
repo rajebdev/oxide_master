@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AppUninstallerView: View {
-    @StateObject private var viewModel = AppUninstallerViewModel()
+    @ObservedObject var viewModel: AppUninstallerViewModel
     @State private var selectedApp: AppInfo?
     @State private var showingUninstallSheet = false
     @State private var showingOrphaned = false

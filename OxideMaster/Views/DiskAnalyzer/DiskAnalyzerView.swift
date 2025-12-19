@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct DiskAnalyzerView: View {
-    @StateObject private var viewModel = DiskAnalyzerViewModel()
+    @ObservedObject var viewModel: DiskAnalyzerViewModel
     @State private var showingFolderPicker = false
     @State private var showingDeleteConfirmation = false
 
@@ -89,6 +89,11 @@ struct DiskAnalyzerView: View {
             }
         } message: {
             Text("Are you sure you want to move \(viewModel.selectedFiles.count) items to trash?")
+        }
+        .onAppear {
+            Task {
+                await viewModel.performInitialScanIfNeeded()
+            }
         }
     }
 }

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct CacheManagerView: View {
-    @StateObject private var viewModel = CacheManagerViewModel()
+    @ObservedObject var viewModel: CacheManagerViewModel
     @State private var showingSettings = false
     @State private var showingHistory = false
 

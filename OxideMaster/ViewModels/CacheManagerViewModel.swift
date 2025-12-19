@@ -30,6 +30,9 @@ class CacheManagerViewModel: ObservableObject {
     // Scheduler access
     @Published var hasPendingScheduledCleanup = false
 
+    // Track first appearance for auto-scan
+    @Published var hasPerformedInitialScan = false
+
     /// Group cache items by category
     var groupedCacheItems: [CacheGroup] {
         let grouped = Dictionary(grouping: cacheItems) { $0.category }
