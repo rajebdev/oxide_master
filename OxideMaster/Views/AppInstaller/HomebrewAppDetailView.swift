@@ -8,8 +8,33 @@ struct HomebrewAppDetailView: View {
     @State private var detailedApp: HomebrewApp?
     @State private var isLoadingDetails = true
 
+    // Get the latest app state from viewModel
+    var currentApp: HomebrewApp {
+        viewModel.apps.first(where: { $0.id == app.id })
+            ?? viewModel.installedApps.first(where: { $0.id == app.id })
+            ?? app
+    }
+
     var displayApp: HomebrewApp {
-        detailedApp ?? app
+        // Priority: use detailedApp if available, but preserve isInstalled from currentApp
+        if let detailed = detailedApp {
+            // Create updated version with current installation status
+            return HomebrewApp(
+                name: detailed.name,
+                token: detailed.token,
+                description: detailed.description,
+                homepage: detailed.homepage,
+                version: detailed.version,
+                isInstalled: currentApp.isInstalled,  // Use current status
+                isCask: detailed.isCask,
+                icon: detailed.icon,
+                installSize: detailed.installSize,
+                dependencies: detailed.dependencies,
+                analytics: detailed.analytics,
+                releaseDate: detailed.releaseDate
+            )
+        }
+        return currentApp
     }
 
     var body: some View {
@@ -77,7 +102,7 @@ struct HomebrewAppDetailView: View {
             loadDetails()
         }
         .onChange(of: app.id) {
-            // Reset state and reload when app changes
+            // Reload when app changes
             detailedApp = nil
             isLoadingDetails = true
             loadDetails()
@@ -94,16 +119,26 @@ struct HomebrewAppDetailView: View {
 
             // App Name
             VStack(spacing: 8) {
-                HStack {
-                    Text(displayApp.displayName)
-                        .font(.title)
-                        .fontWeight(.bold)
+                Text(displayApp.displayName)
+                    .font(.title)
+                    .fontWeight(.bold)
 
-                    if displayApp.isInstalled {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                            .font(.title2)
+                if displayApp.isInstalled {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.body)
+                        Text("INSTALLED")
+                            .font(.system(size: 12, weight: .bold))
+                            .tracking(0.5)
                     }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.green)
+                    )
+                    .shadow(color: Color.green.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
 
                 Text(displayApp.token)
@@ -355,10 +390,12 @@ struct HomebrewAppDetailView: View {
 
     private func loadDetails() {
         Task {
-            if let detailed = await viewModel.loadAppDetails(app) {
+            if let detailed = await viewModel.loadAppDetails(currentApp) {
                 detailedApp = detailed
                 isLoadingDetails = false
             } else {
+                // If loading details fails, use the current app to preserve its state
+                detailedApp = currentApp
                 isLoadingDetails = false
             }
         }

@@ -61,6 +61,12 @@ struct AppInstallerView: View {
         } message: {
             Text(viewModel.errorMessage ?? "An unknown error occurred")
         }
+        .sheet(isPresented: $viewModel.showInstallationLogs) {
+            InstallationLogsView(
+                logs: viewModel.installationLogs,
+                isInstalling: viewModel.isInstalling
+            )
+        }
         .onAppear {
             if viewModel.apps.isEmpty && viewModel.installedApps.isEmpty {
                 viewModel.initialLoad()
@@ -140,10 +146,20 @@ struct AppInstallerView: View {
 
                 // Installed Only Toggle
                 Toggle(isOn: $viewModel.showInstalledOnly) {
-                    Label("Installed Only", systemImage: "checkmark.circle.fill")
+                    HStack(spacing: 6) {
+                        Image(
+                            systemName: viewModel.showInstalledOnly
+                                ? "checkmark.seal.fill" : "checkmark.circle")
+                        Text("Installed Only")
+                        if viewModel.showInstalledOnly && !viewModel.installedApps.isEmpty {
+                            Text("(\(viewModel.installedApps.count))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 .toggleStyle(.button)
-                .tint(Constants.Colors.primaryColor)
+                .tint(viewModel.showInstalledOnly ? Color.green : Constants.Colors.primaryColor)
                 .controlSize(.regular)
             }
 
@@ -360,6 +376,22 @@ struct AppInstallerView: View {
 
             Spacer()
 
+            // Installed apps count
+            if !viewModel.installedApps.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                    Text("\(viewModel.installedApps.count) installed")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(6)
+            }
+
             Text("\(viewModel.filteredApps.count) apps")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -389,8 +421,18 @@ struct BrewAppRowView: View {
                         .font(.headline)
 
                     if app.isInstalled {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption)
+                            Text("INSTALLED")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.green)
+                        .cornerRadius(4)
+                        .help("This app is already installed on your system")
                     }
                 }
 
@@ -458,16 +500,27 @@ struct BrewAppRowView: View {
         }
         .padding()
         .background(
-            isSelected
-                ? Constants.Colors.primaryColor.opacity(0.15)
-                : Color(NSColor.controlBackgroundColor).opacity(0.5)
+            Group {
+                if app.isInstalled {
+                    Color.green.opacity(0.05)
+                } else if isSelected {
+                    Constants.Colors.primaryColor.opacity(0.15)
+                } else {
+                    Color(NSColor.controlBackgroundColor).opacity(0.5)
+                }
+            }
         )
         .cornerRadius(8)
         .padding(.horizontal)
         .padding(.vertical, 4)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Constants.Colors.primaryColor : Color.clear, lineWidth: 2)
+                .stroke(
+                    app.isInstalled
+                        ? Color.green.opacity(0.3)
+                        : (isSelected ? Constants.Colors.primaryColor : Color.clear),
+                    lineWidth: app.isInstalled ? 1.5 : 2
+                )
                 .padding(.horizontal)
                 .padding(.vertical, 4)
         )

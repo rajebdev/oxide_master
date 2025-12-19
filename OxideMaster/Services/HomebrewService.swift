@@ -185,29 +185,27 @@ class HomebrewService: ObservableObject {
     // MARK: - Install / Uninstall
 
     func installApp(_ app: HomebrewApp, progress: @escaping (String) -> Void) async throws {
-        progress("Installing \(app.name)...")
+        progress("📥 Downloading \(app.name)...")
 
         let command = app.isCask ? "install --cask" : "install"
-        let output = runBrewCommand(arguments: command.components(separatedBy: " ") + [app.token])
+        try await runBrewCommandWithProgress(
+            arguments: command.components(separatedBy: " ") + [app.token],
+            progress: progress
+        )
 
-        if output.contains("Error") {
-            throw HomebrewError.installationFailed(output)
-        }
-
-        progress("Successfully installed \(app.name)")
+        progress("✓ Successfully installed \(app.name)")
     }
 
     func uninstallApp(_ app: HomebrewApp, progress: @escaping (String) -> Void) async throws {
-        progress("Uninstalling \(app.name)...")
+        progress("🗑️ Removing \(app.name)...")
 
         let command = app.isCask ? "uninstall --cask" : "uninstall"
-        let output = runBrewCommand(arguments: command.components(separatedBy: " ") + [app.token])
+        try await runBrewCommandWithProgress(
+            arguments: command.components(separatedBy: " ") + [app.token],
+            progress: progress
+        )
 
-        if output.contains("Error") {
-            throw HomebrewError.uninstallationFailed(output)
-        }
-
-        progress("Successfully uninstalled \(app.name)")
+        progress("✓ Successfully uninstalled \(app.name)")
     }
 
     // MARK: - Homebrew Info
@@ -259,6 +257,106 @@ class HomebrewService: ObservableObject {
         }
 
         return nil
+    }
+
+    private func runBrewCommandWithProgress(
+        arguments: [String],
+        progress: @escaping (String) -> Void
+    ) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            let task = Process()
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+
+            // Find brew path
+            let homebrewPaths = [
+                "/opt/homebrew/bin/brew",  // Apple Silicon
+                "/usr/local/bin/brew",  // Intel
+            ]
+
+            guard
+                let brewPath = homebrewPaths.first(where: {
+                    FileManager.default.fileExists(atPath: $0)
+                })
+            else {
+                continuation.resume(throwing: HomebrewError.homebrewNotInstalled)
+                return
+            }
+
+            task.launchPath = brewPath
+            task.arguments = arguments
+            task.standardOutput = outputPipe
+            task.standardError = errorPipe
+
+            // Use a thread-safe class to store data
+            final class DataAccumulator: @unchecked Sendable {
+                private let lock = NSLock()
+                private var _data = Data()
+
+                func append(_ data: Data) {
+                    lock.lock()
+                    defer { lock.unlock() }
+                    _data.append(data)
+                }
+
+                func getData() -> Data {
+                    lock.lock()
+                    defer { lock.unlock() }
+                    return _data
+                }
+            }
+
+            let errorAccumulator = DataAccumulator()
+
+            // Read output in real-time
+            outputPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if !data.isEmpty {
+                    if let line = String(data: data, encoding: .utf8)?.trimmingCharacters(
+                        in: .whitespacesAndNewlines)
+                    {
+                        if !line.isEmpty {
+                            progress(line)
+                        }
+                    }
+                }
+            }
+
+            // Read errors in real-time
+            errorPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if !data.isEmpty {
+                    errorAccumulator.append(data)
+
+                    if let line = String(data: data, encoding: .utf8)?.trimmingCharacters(
+                        in: .whitespacesAndNewlines)
+                    {
+                        if !line.isEmpty && !line.contains("Warning") {
+                            progress("⚠️ \(line)")
+                        }
+                    }
+                }
+            }
+
+            task.terminationHandler = { process in
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                errorPipe.fileHandleForReading.readabilityHandler = nil
+
+                if process.terminationStatus != 0 {
+                    let errorOutput =
+                        String(data: errorAccumulator.getData(), encoding: .utf8) ?? "Unknown error"
+                    continuation.resume(throwing: HomebrewError.commandFailed(errorOutput))
+                } else {
+                    continuation.resume()
+                }
+            }
+
+            do {
+                try task.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     private func runBrewCommand(arguments: [String]) -> String {

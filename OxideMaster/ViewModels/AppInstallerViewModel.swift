@@ -17,6 +17,8 @@ class AppInstallerViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var homebrewInstalled = true
+    @Published var installationLogs: [String] = []
+    @Published var showInstallationLogs = false
 
     // Track first appearance for auto-scan
     @Published var hasPerformedInitialScan = false
@@ -190,19 +192,30 @@ class AppInstallerViewModel: ObservableObject {
     func installApp(_ app: HomebrewApp) {
         Task {
             isInstalling = true
+            installationLogs = []
+            showInstallationLogs = true
+
+            addLog("🚀 Starting installation of \(app.name)...")
+            addLog("📦 Package: \(app.token)")
+            addLog("")
 
             do {
                 try await service.installApp(app) { message in
                     Task { @MainActor in
                         self.statusMessage = message
+                        self.addLog(message)
                     }
                 }
 
                 // Refresh app status
                 await refreshAppStatus(app)
 
+                addLog("")
+                addLog("✅ \(app.name) installed successfully!")
                 statusMessage = "✓ \(app.name) installed successfully"
             } catch {
+                addLog("")
+                addLog("❌ Installation failed: \(error.localizedDescription)")
                 errorMessage = error.localizedDescription
                 showError = true
                 statusMessage = "Installation failed"
@@ -212,22 +225,39 @@ class AppInstallerViewModel: ObservableObject {
         }
     }
 
+    private func addLog(_ message: String) {
+        let timestamp = DateFormatter.localizedString(
+            from: Date(), dateStyle: .none, timeStyle: .medium)
+        installationLogs.append("[\(timestamp)] \(message)")
+    }
+
     func uninstallApp(_ app: HomebrewApp) {
         Task {
             isInstalling = true
+            installationLogs = []
+            showInstallationLogs = true
+
+            addLog("🗑️ Starting uninstallation of \(app.name)...")
+            addLog("📦 Package: \(app.token)")
+            addLog("")
 
             do {
                 try await service.uninstallApp(app) { message in
                     Task { @MainActor in
                         self.statusMessage = message
+                        self.addLog(message)
                     }
                 }
 
                 // Refresh app status
                 await refreshAppStatus(app)
 
+                addLog("")
+                addLog("✅ \(app.name) uninstalled successfully!")
                 statusMessage = "✓ \(app.name) uninstalled successfully"
             } catch {
+                addLog("")
+                addLog("❌ Uninstallation failed: \(error.localizedDescription)")
                 errorMessage = error.localizedDescription
                 showError = true
                 statusMessage = "Uninstallation failed"
