@@ -76,8 +76,13 @@ struct FileInfo: Identifiable, Codable, Hashable {
         let modifiedDate = resourceValues.contentModificationDate ?? Date()
         let fileType = FileType.from(url: url)
 
-        // Get size - for files use fileSize, for directories will be calculated later
-        let size = Int64(resourceValues.fileSize ?? 0)
+        // Get size - for directories use du command for fast calculation
+        let size: Int64
+        if isDirectory {
+            size = calculateDirectorySize(path: url.path)
+        } else {
+            size = Int64(resourceValues.fileSize ?? 0)
+        }
 
         // Get permissions and check if read-only
         let permissions: String
@@ -158,9 +163,6 @@ struct FileInfo: Identifiable, Codable, Hashable {
 
     /// Get formatted size string
     var formattedSize: String {
-        if isDirectory {
-            return "-"
-        }
         return ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
     }
 
@@ -186,6 +188,38 @@ struct FileInfo: Identifiable, Codable, Hashable {
         }
         return .primary  // Default color
     }
+}
+
+/// Calculate directory size using du command (fast)
+func calculateDirectorySize(path: String) -> Int64 {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/du")
+    process.arguments = ["-sk", path]
+
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = Pipe()
+
+    do {
+        try process.run()
+        process.waitUntilExit()
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8) {
+            // du output format: "size\tpath"
+            let components = output.components(separatedBy: "\t")
+            if let sizeStr = components.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+                let sizeKB = Int64(sizeStr)
+            {
+                return sizeKB * 1024  // Convert KB to bytes
+            }
+        }
+    } catch {
+        // If du fails, return 0
+        return 0
+    }
+
+    return 0
 }
 
 /// Format POSIX permissions to string (e.g., "drwxr-xr-x")

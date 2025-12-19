@@ -5,7 +5,68 @@
 //  Created on 2025-12-17.
 //
 
+import Combine
 import Foundation
+
+/// Selectable item for preview
+class SelectableItem: Identifiable, ObservableObject {
+    let id: UUID
+    let fileInfo: FileInfo
+    let isRepo: Bool
+    @Published var isSelected: Bool
+
+    init(fileInfo: FileInfo, isRepo: Bool, isSelected: Bool = true) {
+        self.id = fileInfo.id
+        self.fileInfo = fileInfo
+        self.isRepo = isRepo
+        self.isSelected = isSelected
+    }
+}
+
+/// Preview result for backup operation
+class BackupPreviewResult: ObservableObject {
+    @Published var repoItems: [SelectableItem]
+    @Published var fileItems: [SelectableItem]
+    private var cancellables = Set<AnyCancellable>()
+
+    init(repos: [FileInfo], files: [FileInfo]) {
+        self.repoItems = repos.map { SelectableItem(fileInfo: $0, isRepo: true) }
+        self.fileItems = files.map { SelectableItem(fileInfo: $0, isRepo: false) }
+
+        // Subscribe to changes in each item to trigger UI updates
+        setupSubscriptions()
+    }
+
+    private func setupSubscriptions() {
+        for item in repoItems + fileItems {
+            item.objectWillChange.sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }.store(in: &cancellables)
+        }
+    }
+
+    var selectedRepos: [FileInfo] {
+        repoItems.filter { $0.isSelected }.map { $0.fileInfo }
+    }
+
+    var selectedFiles: [FileInfo] {
+        fileItems.filter { $0.isSelected }.map { $0.fileInfo }
+    }
+
+    var totalSize: Int64 {
+        let reposSize = selectedRepos.reduce(0) { $0 + $1.size }
+        let filesSize = selectedFiles.reduce(0) { $0 + $1.size }
+        return reposSize + filesSize
+    }
+
+    var totalCount: Int {
+        selectedRepos.count + selectedFiles.count
+    }
+
+    var allCount: Int {
+        repoItems.count + fileItems.count
+    }
+}
 
 /// Service for backup operations
 class BackupService {
@@ -62,9 +123,34 @@ class BackupService {
         saveHistory(history)
     }
 
+    /// Scan and preview files to be moved
+    func scanPreview(
+        config: BackupConfig,
+        progressHandler: @escaping (Double, String) -> Void
+    ) async throws -> BackupPreviewResult {
+        guard config.isValid else {
+            throw BackupError.invalidConfiguration
+        }
+
+        progressHandler(0.0, "Starting scan...")
+
+        // Scan source directory for git repos and files
+        progressHandler(0.3, "Scanning source directory...")
+        let scanResult = try await scanForBackup(
+            sourcePath: config.sourcePath,
+            cutoffDate: config.cutoffDate
+        )
+
+        progressHandler(1.0, "Scan complete")
+
+        let result = BackupPreviewResult(repos: scanResult.repos, files: scanResult.files)
+        return result
+    }
+
     /// Run backup with current configuration
     func runBackup(
         config: BackupConfig,
+        previewResult: BackupPreviewResult? = nil,
         progressHandler: @escaping (Double, String) -> Void
     ) async throws -> BackupRecord {
         guard config.isValid else {
@@ -72,16 +158,25 @@ class BackupService {
         }
 
         let startTime = Date()
-        progressHandler(0.0, "Starting backup...")
+        progressHandler(0.0, "Starting move...")
 
-        // Scan source directory
-        progressHandler(0.1, "Scanning source directory...")
-        let filesToBackup = try await scanFilesForBackup(
-            sourcePath: config.sourcePath,
-            cutoffDate: config.cutoffDate
+        // Use preview result if available, otherwise scan
+        let scanResult: ScanResult
+        if let preview = previewResult {
+            progressHandler(0.1, "Using selected items...")
+            // Only move selected items
+            scanResult = ScanResult(repos: preview.selectedRepos, files: preview.selectedFiles)
+        } else {
+            progressHandler(0.1, "Scanning source directory...")
+            scanResult = try await scanForBackup(
+                sourcePath: config.sourcePath,
+                cutoffDate: config.cutoffDate
+            )
+        }
+
+        progressHandler(
+            0.3, "Found \(scanResult.repos.count) repos and \(scanResult.files.count) files to move"
         )
-
-        progressHandler(0.3, "Found \(filesToBackup.count) files to backup")
 
         // Create destination directory if needed
         try fileManager.createDirectory(
@@ -90,24 +185,28 @@ class BackupService {
             attributes: nil
         )
 
-        // Copy files
-        var copiedFiles = 0
+        // Move items
+        var movedFiles = 0
+        var movedRepos = 0
         var totalSize: Int64 = 0
         var lastError: String?
 
-        for (index, file) in filesToBackup.enumerated() {
-            let progress = 0.3 + (0.7 * Double(index) / Double(filesToBackup.count))
-            progressHandler(progress, "Backing up \(file.name)...")
+        let totalItems = scanResult.repos.count + scanResult.files.count
+        var processedItems = 0
+
+        // Move git repos first
+        for repo in scanResult.repos {
+            let progress = 0.3 + (0.7 * Double(processedItems) / Double(totalItems))
+            progressHandler(progress, "Moving repo \(repo.name)...")
 
             do {
-                let destinationPath = try getDestinationPath(
-                    for: file,
-                    sourcePath: config.sourcePath,
-                    destinationPath: config.destinationPath,
-                    preserveStructure: config.preserveStructure
+                let destinationPath = getExactDestinationPath(
+                    sourcePath: repo.path,
+                    sourceRoot: config.sourcePath,
+                    destinationRoot: config.destinationPath
                 )
 
-                // Create intermediate directories
+                // Create parent directory
                 let destinationURL = URL(fileURLWithPath: destinationPath)
                 let parentURL = destinationURL.deletingLastPathComponent()
                 try fileManager.createDirectory(
@@ -116,27 +215,71 @@ class BackupService {
                     attributes: nil
                 )
 
-                // Copy file
-                if !fileManager.fileExists(atPath: destinationPath) {
-                    try fileManager.copyItem(atPath: file.path, toPath: destinationPath)
-                    copiedFiles += 1
-                    totalSize += file.size
+                // Move entire repo folder (handle cross-volume)
+                // If destination exists, remove it first (replace)
+                if fileManager.fileExists(atPath: destinationPath) {
+                    try fileManager.removeItem(atPath: destinationPath)
                 }
+
+                try moveItemCrossVolume(from: repo.path, to: destinationPath)
+                movedRepos += 1
+                totalSize += repo.size
             } catch {
                 lastError = error.localizedDescription
-                print("Error copying \(file.path): \(error)")
+                print("Error moving repo \(repo.path): \(error)")
             }
+
+            processedItems += 1
+        }
+
+        // Move individual files
+        for file in scanResult.files {
+            let progress = 0.3 + (0.7 * Double(processedItems) / Double(totalItems))
+            progressHandler(progress, "Moving \(file.name)...")
+
+            do {
+                let destinationPath = getExactDestinationPath(
+                    sourcePath: file.path,
+                    sourceRoot: config.sourcePath,
+                    destinationRoot: config.destinationPath
+                )
+
+                // Create parent directory
+                let destinationURL = URL(fileURLWithPath: destinationPath)
+                let parentURL = destinationURL.deletingLastPathComponent()
+                try fileManager.createDirectory(
+                    at: parentURL,
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+
+                // Move file (handle cross-volume)
+                // If destination exists, remove it first (replace)
+                if fileManager.fileExists(atPath: destinationPath) {
+                    try fileManager.removeItem(atPath: destinationPath)
+                }
+
+                try moveItemCrossVolume(from: file.path, to: destinationPath)
+                movedFiles += 1
+                totalSize += file.size
+            } catch {
+                lastError = error.localizedDescription
+                print("Error moving \(file.path): \(error)")
+            }
+
+            processedItems += 1
         }
 
         let duration = Date().timeIntervalSince(startTime)
-        progressHandler(1.0, "Backup complete")
+        progressHandler(1.0, "Move complete")
 
         // Create backup record
         let record = BackupRecord(
             timestamp: Date(),
             sourcePath: config.sourcePath,
             destinationPath: config.destinationPath,
-            filesCopied: copiedFiles,
+            filesMoved: movedFiles,
+            reposMoved: movedRepos,
             totalSize: totalSize,
             duration: duration,
             success: lastError == nil,
@@ -154,12 +297,120 @@ class BackupService {
         return record
     }
 
-    /// Scan files that match the backup criteria
-    private func scanFilesForBackup(sourcePath: String, cutoffDate: Date) async throws -> [FileInfo]
-    {
-        var matchingFiles: [FileInfo] = []
+    /// Result of scanning source directory
+    private struct ScanResult {
+        let repos: [FileInfo]
+        let files: [FileInfo]
+    }
 
-        let url = URL(fileURLWithPath: sourcePath)
+    /// Scan for git repos and files to backup
+    private func scanForBackup(sourcePath: String, cutoffDate: Date) async throws -> ScanResult {
+        var gitRepos: [FileInfo] = []
+        var individualFiles: [FileInfo] = []
+        var processedRepoPaths: Set<String> = []
+
+        let sourceURL = URL(fileURLWithPath: sourcePath)
+
+        // First pass: Find project repositories (git or vscode)
+        try await findProjectRepositories(
+            in: sourceURL,
+            cutoffDate: cutoffDate,
+            repos: &gitRepos,
+            processedPaths: &processedRepoPaths
+        )
+
+        // Second pass: Find individual files not in project repos
+        try await findIndividualFiles(
+            in: sourceURL,
+            cutoffDate: cutoffDate,
+            excludePaths: processedRepoPaths,
+            files: &individualFiles
+        )
+
+        return ScanResult(repos: gitRepos, files: individualFiles)
+    }
+
+    /// Find project repositories (git or vscode) and check their last modified date
+    private func findProjectRepositories(
+        in directory: URL,
+        cutoffDate: Date,
+        repos: inout [FileInfo],
+        processedPaths: inout Set<String>
+    ) async throws {
+        let resourceKeys: Set<URLResourceKey> = [.nameKey, .isDirectoryKey]
+
+        guard
+            let enumerator = fileManager.enumerator(
+                at: directory,
+                includingPropertiesForKeys: Array(resourceKeys),
+                options: [.skipsPackageDescendants]
+            )
+        else {
+            throw BackupError.scanFailed
+        }
+
+        // Convert to array and sort by path length (shortest first)
+        // This ensures parent repos are processed before nested repos
+        let allURLs = enumerator.allObjects
+            .compactMap { $0 as? URL }
+            .sorted { $0.path.count < $1.path.count }
+
+        // Track both processed and skipped repos
+        var allCheckedPaths = Set<String>()
+
+        for fileURL in allURLs {
+            let resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)
+            let isDirectory = resourceValues.isDirectory ?? false
+
+            if isDirectory
+                && (fileURL.lastPathComponent == ".git" || fileURL.lastPathComponent == ".vscode")
+            {
+                // Found a project marker, check parent directory
+                let projectURL = fileURL.deletingLastPathComponent()
+                let projectPath = projectURL.path
+
+                // Check if already checked (either processed or skipped)
+                if allCheckedPaths.contains(projectPath) {
+                    continue
+                }
+
+                // Check if this repo is inside another repo already checked (nested repos)
+                var isNestedRepo = false
+                for parentPath in allCheckedPaths {
+                    if projectPath.hasPrefix(parentPath + "/") {
+                        isNestedRepo = true
+                        break
+                    }
+                }
+
+                // Skip nested repos - only keep parent repo
+                if isNestedRepo {
+                    continue
+                }
+
+                // Mark as checked regardless of result
+                allCheckedPaths.insert(projectPath)
+
+                // Check if project has any files modified within date range
+                let hasRecentFiles = try hasFilesModifiedAfter(projectURL, cutoffDate: cutoffDate)
+
+                if hasRecentFiles {
+                    // Project is eligible for move
+                    let info = try FileInfo.from(url: projectURL, includeChildren: false)
+                    repos.append(info)
+                    processedPaths.insert(projectPath)
+                }
+            }
+        }
+    }
+
+    /// Find individual files not in git repos
+    private func findIndividualFiles(
+        in directory: URL,
+        cutoffDate: Date,
+        excludePaths: Set<String>,
+        files: inout [FileInfo]
+    ) async throws {
         let resourceKeys: Set<URLResourceKey> = [
             .nameKey,
             .isDirectoryKey,
@@ -169,7 +420,7 @@ class BackupService {
 
         guard
             let enumerator = fileManager.enumerator(
-                at: url,
+                at: directory,
                 includingPropertiesForKeys: Array(resourceKeys),
                 options: [.skipsHiddenFiles]
             )
@@ -177,48 +428,156 @@ class BackupService {
             throw BackupError.scanFailed
         }
 
+        // Convert to array to avoid async iteration warning
         let allURLs = enumerator.allObjects.compactMap { $0 as? URL }
+
+        // Track folders we've checked - if parent is new, skip all children
+        var checkedFolders: [String: Bool] = [:]  // path -> isOld
+
         for fileURL in allURLs {
-            do {
-                let resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)
-                let isDirectory = resourceValues.isDirectory ?? false
+            // Check if file is inside an excluded repo path
+            let filePath = fileURL.path
+            var isInExcludedPath = false
 
-                // Skip directories, only backup files
-                guard !isDirectory else { continue }
+            for excludePath in excludePaths {
+                if filePath.hasPrefix(excludePath + "/") || filePath == excludePath {
+                    isInExcludedPath = true
+                    break
+                }
+            }
 
-                // Check modification date
+            if isInExcludedPath {
+                continue
+            }
+
+            let resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)
+            let isDirectory = resourceValues.isDirectory ?? false
+
+            // Only process files, not directories
+            if !isDirectory {
+                // Check if ANY parent folder in the path is new (modified recently)
+                var currentURL = fileURL.deletingLastPathComponent()
+                let sourcePath = directory.path
+                var skipFile = false
+
+                // Check all parent folders from file up to source root
+                while currentURL.path.hasPrefix(sourcePath) && currentURL.path != sourcePath {
+                    let currentPath = currentURL.path
+
+                    // Check cached result first
+                    if let isOld = checkedFolders[currentPath] {
+                        if !isOld {
+                            skipFile = true
+                            break
+                        }
+                    } else {
+                        // Check folder modification date
+                        let folderResources = try currentURL.resourceValues(forKeys: [
+                            .contentModificationDateKey
+                        ])
+                        if let folderModDate = folderResources.contentModificationDate {
+                            let isOld = folderModDate < cutoffDate
+                            checkedFolders[currentPath] = isOld
+
+                            if !isOld {
+                                skipFile = true
+                                break
+                            }
+                        }
+                    }
+
+                    // Move up to parent folder
+                    currentURL = currentURL.deletingLastPathComponent()
+                }
+
+                if skipFile {
+                    continue
+                }
+
+                // All parent folders are old, now check file itself
                 if let modDate = resourceValues.contentModificationDate,
-                    modDate >= cutoffDate
+                    modDate < cutoffDate
                 {
                     let info = try FileInfo.from(url: fileURL, includeChildren: false)
-                    matchingFiles.append(info)
+                    files.append(info)
                 }
-            } catch {
-                print("Error reading \(fileURL.path): \(error)")
+            }
+        }
+    }
+
+    /// Check if directory should be moved (all content is old, nothing modified recently)
+    private func hasFilesModifiedAfter(_ directory: URL, cutoffDate: Date) throws -> Bool {
+        let resourceKeys: Set<URLResourceKey> = [.contentModificationDateKey, .isDirectoryKey]
+
+        // First check the parent folder itself - if new, skip immediately (don't check inside)
+        let parentResources = try directory.resourceValues(forKeys: resourceKeys)
+        if let parentModDate = parentResources.contentModificationDate {
+            if parentModDate >= cutoffDate {
+                return false  // Parent folder is new, don't check children
             }
         }
 
-        return matchingFiles
+        // Parent is old, now check all children (both folders and files)
+        guard
+            let enumerator = fileManager.enumerator(
+                at: directory,
+                includingPropertiesForKeys: Array(resourceKeys),
+                options: []
+            )
+        else {
+            return false
+        }
+
+        for case let fileURL as URL in enumerator {
+            do {
+                let resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)
+
+                // Check modification date for both files and folders
+                if let modDate = resourceValues.contentModificationDate {
+                    if modDate >= cutoffDate {
+                        return false  // Found something new, skip this repo
+                    }
+                }
+            } catch {
+                // Skip items we can't read
+                continue
+            }
+        }
+
+        return true  // Everything is old, include this repo
     }
 
-    /// Get destination path for file
-    private func getDestinationPath(
-        for file: FileInfo,
+    /// Get exact destination path preserving source structure
+    private func getExactDestinationPath(
         sourcePath: String,
-        destinationPath: String,
-        preserveStructure: Bool
-    ) throws -> String {
-        if preserveStructure {
-            // Preserve folder structure
-            let relativePath = String(file.path.dropFirst(sourcePath.count))
-            return URL(fileURLWithPath: destinationPath)
-                .appendingPathComponent(relativePath)
-                .path
-        } else {
-            // Flat structure
-            return URL(fileURLWithPath: destinationPath)
-                .appendingPathComponent(file.name)
-                .path
+        sourceRoot: String,
+        destinationRoot: String
+    ) -> String {
+        // Get relative path from source root
+        let relativePath = String(sourcePath.dropFirst(sourceRoot.count))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        // Append to destination root
+        return URL(fileURLWithPath: destinationRoot)
+            .appendingPathComponent(relativePath)
+            .path
+    }
+
+    /// Move item supporting cross-volume (different drives/external SSD)
+    private func moveItemCrossVolume(from sourcePath: String, to destinationPath: String) throws {
+        // Try direct move first (works for same volume)
+        do {
+            try fileManager.moveItem(atPath: sourcePath, toPath: destinationPath)
+        } catch let error as NSError {
+            // Check if error is due to cross-device move (EXDEV error code 18)
+            if error.domain == NSPOSIXErrorDomain && error.code == 18 {
+                // Copy then delete for cross-volume move
+                try fileManager.copyItem(atPath: sourcePath, toPath: destinationPath)
+                try fileManager.removeItem(atPath: sourcePath)
+            } else {
+                // Re-throw other errors
+                throw error
+            }
         }
     }
 
