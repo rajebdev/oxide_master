@@ -8,6 +8,19 @@
 import Foundation
 import SwiftUI
 
+/// Cache sort options
+enum CacheSortOption: String, CaseIterable {
+    case size = "Size"
+    case path = "Path"
+
+    var icon: String {
+        switch self {
+        case .size: return "arrow.up.arrow.down"
+        case .path: return "folder"
+        }
+    }
+}
+
 /// ViewModel for Cache Manager
 @MainActor
 class CacheManagerViewModel: ObservableObject {
@@ -27,6 +40,9 @@ class CacheManagerViewModel: ObservableObject {
     // Grouped items for tree view
     @Published var expandedCategories: Set<CacheCategory> = Set(CacheCategory.allCases)
 
+    // Sorting
+    @Published var sortOption: CacheSortOption = .size
+
     // Scheduler access
     @Published var hasPendingScheduledCleanup = false
 
@@ -40,9 +56,19 @@ class CacheManagerViewModel: ObservableObject {
             guard let items = grouped[category], !items.isEmpty else { return nil }
             return CacheGroup(
                 category: category,
-                items: items.sorted { $0.name < $1.name },
+                items: sortedItems(items),
                 isExpanded: expandedCategories.contains(category)
             )
+        }
+    }
+
+    /// Sort items based on current sort option
+    private func sortedItems(_ items: [CacheItem]) -> [CacheItem] {
+        switch sortOption {
+        case .size:
+            return items.sorted { $0.sizeBytes > $1.sizeBytes }
+        case .path:
+            return items.sorted { $0.path < $1.path }
         }
     }
 

@@ -324,6 +324,22 @@ struct CachePreviewView: View {
                 }
             }
 
+            // Sort options
+            HStack(spacing: 8) {
+                Text("Sort by:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Picker("Sort", selection: $viewModel.sortOption) {
+                    ForEach(CacheSortOption.allCases, id: \.self) { option in
+                        Label(option.rawValue, systemImage: option.icon)
+                            .tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 200)
+            }
+
             Divider()
 
             // Grouped list of cache items

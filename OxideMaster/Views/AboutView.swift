@@ -130,7 +130,7 @@ struct AboutView: View {
                 // Links
                 HStack(spacing: 20) {
                     Button {
-                        if let url = URL(string: "https://github.com/rajebdev") {
+                        if let url = URL(string: "https://github.com/rajebdev/oxide_master") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
@@ -139,7 +139,7 @@ struct AboutView: View {
                     .buttonStyle(.bordered)
 
                     Button {
-                        if let url = URL(string: "mailto:support@oxidemaster.app") {
+                        if let url = URL(string: "mailto:wijanarko.rajeb@gmail.com") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
