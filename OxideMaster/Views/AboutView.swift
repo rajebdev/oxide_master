@@ -38,21 +38,9 @@ struct AboutView: View {
                 // Features
                 VStack(alignment: .leading, spacing: 20) {
                     FeatureRow(
-                        icon: "chart.pie.fill",
-                        title: "Disk Analyzer",
-                        description: "Visualize disk usage with TreeMap and hierarchical views"
-                    )
-
-                    FeatureRow(
-                        icon: "tray.fill",
-                        title: "Cache Cleaner",
-                        description: "Clean system and application caches"
-                    )
-
-                    FeatureRow(
-                        icon: "arrow.clockwise.circle.fill",
-                        title: "Backup Manager",
-                        description: "Schedule automated backups with compression"
+                        icon: "square.and.arrow.down.fill",
+                        title: "App Installer",
+                        description: "Browse and install apps from Homebrew"
                     )
 
                     FeatureRow(
@@ -62,15 +50,27 @@ struct AboutView: View {
                     )
 
                     FeatureRow(
-                        icon: "square.and.arrow.down.fill",
-                        title: "App Installer",
-                        description: "Browse and install apps from Homebrew"
+                        icon: "chart.pie.fill",
+                        title: "Disk Analyzer",
+                        description: "Visualize disk usage with TreeMap and hierarchical views"
+                    )
+
+                    FeatureRow(
+                        icon: "tray.fill",
+                        title: "Cache Manager",
+                        description: "Clean system and application caches"
                     )
 
                     FeatureRow(
                         icon: "arrow.left.arrow.right.circle.fill",
                         title: "File Sync",
                         description: "Synchronize files between directories"
+                    )
+
+                    FeatureRow(
+                        icon: "arrow.clockwise.circle.fill",
+                        title: "Backup Manager",
+                        description: "Schedule automated backups with compression"
                     )
                 }
                 .frame(maxWidth: 500)

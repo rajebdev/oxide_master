@@ -100,6 +100,22 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+
+            SidebarButton(
+                title: "App Installer",
+                icon: "arrow.down.app.fill",
+                isSelected: selectedTab == .installer
+            ) {
+                selectedTab = .installer
+            }
+
+            SidebarButton(
+                title: "App Uninstaller",
+                icon: "xmark.app.fill",
+                isSelected: selectedTab == .uninstaller
+            ) {
+                selectedTab = .uninstaller
+            }
             SidebarButton(
                 title: "Disk Analyzer",
                 icon: Constants.Icons.disk,
@@ -117,35 +133,19 @@ struct SidebarView: View {
             }
 
             SidebarButton(
-                title: "Backup Manager",
-                icon: Constants.Icons.backup,
-                isSelected: selectedTab == .backup
-            ) {
-                selectedTab = .backup
-            }
-
-            SidebarButton(
-                title: "App Uninstaller",
-                icon: "xmark.app.fill",
-                isSelected: selectedTab == .uninstaller
-            ) {
-                selectedTab = .uninstaller
-            }
-
-            SidebarButton(
-                title: "App Installer",
-                icon: "arrow.down.app.fill",
-                isSelected: selectedTab == .installer
-            ) {
-                selectedTab = .installer
-            }
-
-            SidebarButton(
                 title: "File Sync",
                 icon: Constants.Icons.sync,
                 isSelected: selectedTab == .fileSync
             ) {
                 selectedTab = .fileSync
+            }
+
+            SidebarButton(
+                title: "Backup Manager",
+                icon: Constants.Icons.backup,
+                isSelected: selectedTab == .backup
+            ) {
+                selectedTab = .backup
             }
 
             Spacer()
