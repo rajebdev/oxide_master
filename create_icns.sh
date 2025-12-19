@@ -4,8 +4,8 @@
 # This script converts the generated PNGs into a proper macOS .icns file
 
 ICONSET_DIR="AppIcon.iconset"
-ASSETS_DIR="DiskOxide/Assets.xcassets/AppIcon.appiconset"
-OUTPUT_ICNS="DiskOxide.app/Contents/Resources/AppIcon.icns"
+ASSETS_DIR="OxideMaster/Assets.xcassets/AppIcon.appiconset"
+OUTPUT_ICNS="OxideMaster.app/Contents/Resources/AppIcon.icns"
 
 # Remove old iconset if exists
 rm -rf "$ICONSET_DIR"

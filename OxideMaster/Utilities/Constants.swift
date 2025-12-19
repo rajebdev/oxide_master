@@ -1,6 +1,6 @@
 //
 //  Constants.swift
-//  DiskOxide
+//  OxideMaster
 //
 //  Created on 2025-12-17.
 //
@@ -96,7 +96,7 @@ enum Constants {
         static let infoColor = Color.blue
 
         // UI colors
-        static let primaryColor = Color.blue
+        static let primaryColor = Color.orange
         static let secondaryColor = Color.gray
         static let backgroundColor = Color(NSColor.windowBackgroundColor)
         static let cardBackgroundColor = Color(NSColor.controlBackgroundColor)

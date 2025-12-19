@@ -1,6 +1,6 @@
 //
-//  DiskOxideApp.swift
-//  DiskOxide
+//  OxideMasterApp.swift
+//  OxideMaster
 //
 //  Created on 2025-12-17.
 //

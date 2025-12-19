@@ -64,6 +64,7 @@ fastlane/test_output
 .build/
 .DS_Store
 .swiftpm/
+OxideMaster.app/
 DiskOxide.app/
 .vscode/
 

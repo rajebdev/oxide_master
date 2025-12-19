@@ -8,9 +8,15 @@ struct AboutView: View {
                     .frame(height: 40)
 
                 // App Icon
-                Image(systemName: "internaldrive.fill")
-                    .font(.system(size: 100))
-                    .foregroundStyle(.blue.gradient)
+                if let appIcon = NSImage(named: "AppIcon") {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 100, height: 100)
+                } else {
+                    Image(systemName: "internaldrive.fill")
+                        .font(.system(size: 100))
+                        .foregroundStyle(Constants.Colors.primaryColor.gradient)
+                }
 
                 // App Name & Version
                 VStack(spacing: 8) {
@@ -38,27 +44,33 @@ struct AboutView: View {
                     )
 
                     FeatureRow(
-                        icon: "arrow.clockwise.circle.fill",
-                        title: "Backup Manager",
-                        description: "Schedule automated backups with compression"
-                    )
-
-                    FeatureRow(
-                        icon: "arrow.left.arrow.right.circle.fill",
-                        title: "File Sync",
-                        description: "Synchronize files between directories"
-                    )
-
-                    FeatureRow(
                         icon: "tray.fill",
                         title: "Cache Cleaner",
                         description: "Clean system and application caches"
                     )
 
                     FeatureRow(
+                        icon: "arrow.clockwise.circle.fill",
+                        title: "Backup Manager",
+                        description: "Schedule automated backups with compression"
+                    )
+
+                    FeatureRow(
                         icon: "xmark.app.fill",
                         title: "App Uninstaller",
                         description: "Completely remove apps and leftover files"
+                    )
+
+                    FeatureRow(
+                        icon: "square.and.arrow.down.fill",
+                        title: "App Installer",
+                        description: "Browse and install apps from Homebrew"
+                    )
+
+                    FeatureRow(
+                        icon: "arrow.left.arrow.right.circle.fill",
+                        title: "File Sync",
+                        description: "Synchronize files between directories"
                     )
                 }
                 .frame(maxWidth: 500)
@@ -74,7 +86,9 @@ struct AboutView: View {
 
                     HStack(spacing: 20) {
                         TechBadge(icon: "swift", name: "Swift", color: .orange)
-                        TechBadge(icon: "apple.logo", name: "SwiftUI", color: .blue)
+                        TechBadge(
+                            icon: "apple.logo", name: "SwiftUI",
+                            color: Constants.Colors.primaryColor)
                         TechBadge(icon: "gearshape.2", name: "macOS", color: .gray)
                     }
                 }
@@ -116,7 +130,7 @@ struct AboutView: View {
                 // Links
                 HStack(spacing: 20) {
                     Button {
-                        if let url = URL(string: "https://github.com") {
+                        if let url = URL(string: "https://github.com/rajebdev") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
@@ -159,7 +173,7 @@ struct FeatureRow: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.title)
-                .foregroundColor(.blue)
+                .foregroundColor(Constants.Colors.primaryColor)
                 .frame(width: 40)
 
             VStack(alignment: .leading, spacing: 4) {

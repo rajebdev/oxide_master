@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# DiskOxide - All-in-one build & run script
+# Oxide Master - All-in-one build & run script
 
 show_usage() {
     echo "Usage: ./dev.sh [command]"
@@ -23,20 +23,20 @@ CMD="${1:-build}"
 
 case "$CMD" in
     build)
-        echo "🔨 Building DiskOxide..."
+        echo "🔨 Building Oxide Master..."
         swift build -c release
         
         if [ $? -eq 0 ]; then
             echo "✅ Build successful!"
             
             # Kill existing
-            pkill -f "DiskOxide.app" 2>/dev/null && echo "✅ Killed existing process"
+            pkill -f "OxideMaster.app" 2>/dev/null && echo "✅ Killed existing process"
             
             # Update bundle (preserve permissions)
             echo "📦 Updating app bundle..."
-            mkdir -p DiskOxide.app/Contents/MacOS DiskOxide.app/Contents/Resources
-            cp .build/release/DiskOxide DiskOxide.app/Contents/MacOS/
-            cp DiskOxide/Info.plist DiskOxide.app/Contents/
+            mkdir -p OxideMaster.app/Contents/MacOS OxideMaster.app/Contents/Resources
+            cp .build/release/OxideMaster OxideMaster.app/Contents/MacOS/
+            cp OxideMaster/Info.plist OxideMaster.app/Contents/
             
             # Create and copy icon
             echo "🎨 Creating app icon..."
@@ -46,11 +46,11 @@ case "$CMD" in
             
             # Sign
             echo "🔏 Signing app..."
-            codesign --force --deep --sign - DiskOxide.app 2>/dev/null
+            codesign --force --deep --sign - OxideMaster.app 2>/dev/null
             
             sleep 0.5
-            echo "🚀 Opening DiskOxide..."
-            open DiskOxide.app
+            echo "🚀 Opening Oxide Master..."
+            open OxideMaster.app
             echo "✅ Done!"
         else
             echo "❌ Build failed!"
@@ -60,28 +60,28 @@ case "$CMD" in
         
     clean)
         echo "🗑️  Cleaning..."
-        rm -rf DiskOxide.app
+        rm -rf OxideMaster.app
         rm -rf .build
         
-        echo "🔨 Building DiskOxide..."
+        echo "🔨 Building Oxide Master..."
         swift build -c release
         
         if [ $? -eq 0 ]; then
             echo "✅ Build successful!"
             
-            pkill -f "DiskOxide.app" 2>/dev/null
+            pkill -f "OxideMaster.app" 2>/dev/null
             
             echo "📦 Creating app bundle..."
-            mkdir -p DiskOxide.app/Contents/MacOS DiskOxide.app/Contents/Resources
-            cp .build/release/DiskOxide DiskOxide.app/Contents/MacOS/
-            cp DiskOxide/Info.plist DiskOxide.app/Contents/
+            mkdir -p OxideMaster.app/Contents/MacOS OxideMaster.app/Contents/Resources
+            cp .build/release/OxideMaster OxideMaster.app/Contents/MacOS/
+            cp OxideMaster/Info.plist OxideMaster.app/Contents/
             
             echo "🔏 Signing app..."
-            codesign --force --deep --sign - DiskOxide.app 2>/dev/null
+            codesign --force --deep --sign - OxideMaster.app 2>/dev/null
             
             sleep 0.5
-            echo "🚀 Opening DiskOxide..."
-            open DiskOxide.app
+            echo "🚀 Opening Oxide Master..."
+            open OxideMaster.app
             echo "✅ Done! (New app - will ask for permissions)"
         else
             echo "❌ Build failed!"
@@ -91,21 +91,21 @@ case "$CMD" in
         
     run)
         echo "🔍 Checking for existing process..."
-        pkill -f "DiskOxide.app" 2>/dev/null && echo "✅ Killed existing process"
+        pkill -f "OxideMaster.app" 2>/dev/null && echo "✅ Killed existing process"
         
         sleep 0.5
-        echo "🚀 Opening DiskOxide..."
-        open DiskOxide.app
+        echo "🚀 Opening Oxide Master..."
+        open OxideMaster.app
         echo "✅ Done!"
         ;;
         
     reset)
         echo "🗑️  Resetting TCC permissions..."
-        pkill -f "DiskOxide.app" 2>/dev/null
-        tccutil reset All com.rajebdev.DiskOxide 2>/dev/null && echo "✅ Reset complete"
+        pkill -f "OxideMaster.app" 2>/dev/null
+        tccutil reset All com.rajebdev.OxideMaster 2>/dev/null && echo "✅ Reset complete"
         echo ""
         echo "📝 If needed, manually remove in System Settings:"
-        echo "   Privacy & Security > Files and Folders > DiskOxide"
+        echo "   Privacy & Security > Files and Folders > Oxide Master"
         ;;
         
     help|--help|-h)

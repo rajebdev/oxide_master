@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "DiskOxide",
+    name: "OxideMaster",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .executable(
-            name: "DiskOxide",
-            targets: ["DiskOxide"]
+            name: "OxideMaster",
+            targets: ["OxideMaster"]
         )
     ],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "DiskOxide",
-            path: "DiskOxide",
+            name: "OxideMaster",
+            path: "OxideMaster",
             exclude: ["Info.plist"],
             resources: [
                 .process("Assets.xcassets")

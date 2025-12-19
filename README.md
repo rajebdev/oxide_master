@@ -1,4 +1,4 @@
-# 🦀 Disk Oxide Swift - Native macOS Edition
+# 🦀 Oxide Master Swift - Native macOS Edition
 
 A powerful **native macOS application** built with **Swift and SwiftUI** for disk analysis, backup management, file synchronization, and cache cleanup.
 
@@ -56,7 +56,7 @@ cd disk_oxide_swift
 
 2. **Open in Xcode**
 ```bash
-open DiskOxide.xcodeproj
+open OxideMaster.xcodeproj
 ```
 
 3. **Build and Run**
@@ -74,8 +74,8 @@ The app uses **standard file picker dialogs** for folder selection. No special p
 ## 🏗️ Project Structure
 
 ```
-DiskOxide/
-├── DiskOxideApp.swift          # App entry point
+OxideMaster/
+├── OxideMasterApp.swift          # App entry point
 ├── ContentView.swift            # Main tab view
 ├── Models/                      # Data models
 │   ├── FileInfo.swift
@@ -155,7 +155,7 @@ DiskOxide/
 ### Running Tests
 ```bash
 # Unit tests
-xcodebuild test -scheme DiskOxide
+xcodebuild test -scheme OxideMaster
 
 # Or press Cmd+U in Xcode
 ```
@@ -178,7 +178,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgments
 
-- Original Tauri version: [Disk Oxide](../disk_oxide)
+- Original Tauri version: [Oxide Master](../disk_oxide)
 - Inspired by WinDirStat, WinSCP, and macOS native tools
 - Built with love for the macOS community
 
