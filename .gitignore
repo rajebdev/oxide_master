@@ -68,3 +68,6 @@ OxideMaster.app/
 DiskOxide.app/
 .vscode/
 
+
+
+*.dmg
