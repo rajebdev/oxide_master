@@ -7,125 +7,142 @@ struct AboutView: View {
                 Spacer()
                     .frame(height: 40)
 
-                // App Icon
-                if let appIcon = NSImage(named: "AppIcon") {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .frame(width: 100, height: 100)
-                } else {
-                    Image(systemName: "internaldrive.fill")
-                        .font(.system(size: 100))
-                        .foregroundStyle(Constants.Colors.primaryColor.gradient)
+                // Main Content: Icon/Info on left, Features on right
+                HStack(alignment: .top, spacing: 20) {
+                    // Left Side: App Icon & Info
+                    VStack(spacing: 20) {
+                        // App Icon
+                        if let appIcon = NSImage(named: "AppIcon") {
+                            Image(nsImage: appIcon)
+                                .resizable()
+                                .frame(width: 100, height: 100)
+                        } else {
+                            Image(systemName: "internaldrive.fill")
+                                .font(.system(size: 100))
+                                .foregroundStyle(Constants.Colors.primaryColor.gradient)
+                        }
+
+                        // App Name & Version
+                        VStack(spacing: 8) {
+                            Text("Oxide Master")
+                                .font(.system(size: 36, weight: .bold))
+
+                            Text("Version 1.0.0")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+
+                            Text("Complete Disk Management Suite for macOS")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    Divider()
+
+                    // Right Side: Features
+                    VStack(alignment: .leading, spacing: 20) {
+                        FeatureRow(
+                            icon: "square.and.arrow.down.fill",
+                            title: "App Installer",
+                            description: "Browse and install apps from Homebrew"
+                        )
+
+                        FeatureRow(
+                            icon: "xmark.app.fill",
+                            title: "App Uninstaller",
+                            description: "Completely remove apps and leftover files"
+                        )
+
+                        FeatureRow(
+                            icon: "chart.pie.fill",
+                            title: "Disk Analyzer",
+                            description: "Visualize disk usage with TreeMap and hierarchical views"
+                        )
+
+                        FeatureRow(
+                            icon: "tray.fill",
+                            title: "Cache Manager",
+                            description: "Clean system and application caches"
+                        )
+
+                        FeatureRow(
+                            icon: "arrow.left.arrow.right.circle.fill",
+                            title: "File Sync",
+                            description: "Synchronize files between directories"
+                        )
+
+                        FeatureRow(
+                            icon: "arrow.clockwise.circle.fill",
+                            title: "Backup Manager",
+                            description: "Schedule automated backups with compression"
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-
-                // App Name & Version
-                VStack(spacing: 8) {
-                    Text("Oxide Master")
-                        .font(.system(size: 36, weight: .bold))
-
-                    Text("Version 1.0.0")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-
-                    Text("Complete Disk Management Suite for macOS")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
+                .padding(.horizontal, 40)
 
                 Divider()
                     .padding(.horizontal, 100)
 
-                // Features
-                VStack(alignment: .leading, spacing: 20) {
-                    FeatureRow(
-                        icon: "square.and.arrow.down.fill",
-                        title: "App Installer",
-                        description: "Browse and install apps from Homebrew"
-                    )
+                // Built with & Developer Info
+                HStack(alignment: .top, spacing: 40) {
+                    // Left: Tech Stack
+                    VStack(spacing: 12) {
+                        Text("Built with")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
 
-                    FeatureRow(
-                        icon: "xmark.app.fill",
-                        title: "App Uninstaller",
-                        description: "Completely remove apps and leftover files"
-                    )
+                        HStack(spacing: 20) {
+                            TechBadge(icon: "swift", name: "Swift", color: .orange)
+                            TechBadge(
+                                icon: "apple.logo", name: "SwiftUI",
+                                color: Constants.Colors.primaryColor)
+                            TechBadge(icon: "gearshape.2", name: "macOS", color: .gray)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
 
-                    FeatureRow(
-                        icon: "chart.pie.fill",
-                        title: "Disk Analyzer",
-                        description: "Visualize disk usage with TreeMap and hierarchical views"
-                    )
+                    // Right: Info & Links
+                    VStack(spacing: 20) {
+                        // Developer Info
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Developer:")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("RajebDev")
+                                    .fontWeight(.medium)
+                            }
 
-                    FeatureRow(
-                        icon: "tray.fill",
-                        title: "Cache Manager",
-                        description: "Clean system and application caches"
-                    )
+                            HStack {
+                                Text("License:")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("MIT License")
+                                    .fontWeight(.medium)
+                            }
 
-                    FeatureRow(
-                        icon: "arrow.left.arrow.right.circle.fill",
-                        title: "File Sync",
-                        description: "Synchronize files between directories"
-                    )
-
-                    FeatureRow(
-                        icon: "arrow.clockwise.circle.fill",
-                        title: "Backup Manager",
-                        description: "Schedule automated backups with compression"
-                    )
+                            HStack {
+                                Text("Created:")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("December 2025")
+                                    .fontWeight(.medium)
+                            }
+                        }
+                        .padding()
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(12)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.trailing, 50)
                 }
-                .frame(maxWidth: 500)
+                .padding(.horizontal, 40)
 
                 Divider()
                     .padding(.horizontal, 100)
-
-                // Tech Stack
-                VStack(spacing: 12) {
-                    Text("Built with")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 20) {
-                        TechBadge(icon: "swift", name: "Swift", color: .orange)
-                        TechBadge(
-                            icon: "apple.logo", name: "SwiftUI",
-                            color: Constants.Colors.primaryColor)
-                        TechBadge(icon: "gearshape.2", name: "macOS", color: .gray)
-                    }
-                }
-
-                Divider()
-                    .padding(.horizontal, 100)
-
-                // Info
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Developer:")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("RajebDev")
-                            .fontWeight(.medium)
-                    }
-
-                    HStack {
-                        Text("License:")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("MIT License")
-                            .fontWeight(.medium)
-                    }
-
-                    HStack {
-                        Text("Created:")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("December 2025")
-                            .fontWeight(.medium)
-                    }
-                }
-                .frame(maxWidth: 400)
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
 
                 // Links
                 HStack(spacing: 20) {
@@ -147,9 +164,6 @@ struct AboutView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-
-                Spacer()
-                    .frame(height: 40)
 
                 // Copyright
                 Text("© 2025 Oxide Master. All rights reserved.")
