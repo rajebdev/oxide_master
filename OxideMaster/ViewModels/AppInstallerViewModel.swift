@@ -23,6 +23,9 @@ class AppInstallerViewModel: ObservableObject {
     // Track first appearance for auto-scan
     @Published var hasPerformedInitialScan = false
 
+    // Track when an app's status changes to force UI updates
+    @Published var lastUpdatedAppId: UUID?
+
     private let service = HomebrewService.shared
     private var searchTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
@@ -285,10 +288,15 @@ class AppInstallerViewModel: ObservableObject {
             if updatedApp.isInstalled {
                 if !installedApps.contains(where: { $0.id == app.id }) {
                     installedApps.append(updatedApp)
+                } else if let index = installedApps.firstIndex(where: { $0.id == app.id }) {
+                    installedApps[index] = updatedApp
                 }
             } else {
                 installedApps.removeAll { $0.id == app.id }
             }
+
+            // Trigger UI update
+            lastUpdatedAppId = app.id
         } catch {
             // Silently fail, the app might not have detailed info
         }

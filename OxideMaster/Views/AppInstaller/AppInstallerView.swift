@@ -3,6 +3,7 @@ import SwiftUI
 struct AppInstallerView: View {
     @ObservedObject var viewModel: AppInstallerViewModel
     @State private var selectedApp: HomebrewApp?
+    @State private var selectedAppId: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +71,17 @@ struct AppInstallerView: View {
         .onAppear {
             if viewModel.apps.isEmpty && viewModel.installedApps.isEmpty {
                 viewModel.initialLoad()
+            }
+        }
+        .onChange(of: viewModel.lastUpdatedAppId) { _, updatedId in
+            // Update selectedApp if it matches the updated app
+            if let id = selectedAppId, id == updatedId {
+                // Find updated app in viewModel
+                if let updated = viewModel.apps.first(where: { $0.id == id }) {
+                    selectedApp = updated
+                } else if let updated = viewModel.installedApps.first(where: { $0.id == id }) {
+                    selectedApp = updated
+                }
             }
         }
     }
@@ -228,6 +240,7 @@ struct AppInstallerView: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     selectedApp = app
+                    selectedAppId = app.id
                 }
             }
         } header: {
@@ -409,18 +422,25 @@ struct BrewAppRowView: View {
     @ObservedObject var viewModel: AppInstallerViewModel
     var isSelected: Bool = false
 
+    // Get the latest app state from viewModel
+    var currentApp: HomebrewApp {
+        viewModel.apps.first(where: { $0.id == app.id })
+            ?? viewModel.installedApps.first(where: { $0.id == app.id })
+            ?? app
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Icon - Load asynchronously
-            AsyncAppIcon(app: app, size: 48)
+            AsyncAppIcon(app: currentApp, size: 48)
 
             // Info
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(app.displayName)
+                    Text(currentApp.displayName)
                         .font(.headline)
 
-                    if app.isInstalled {
+                    if currentApp.isInstalled {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.caption)
@@ -436,7 +456,7 @@ struct BrewAppRowView: View {
                     }
                 }
 
-                if let description = app.description {
+                if let description = currentApp.description {
                     Text(description)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -444,20 +464,20 @@ struct BrewAppRowView: View {
                 }
 
                 HStack(spacing: 8) {
-                    Text(app.version)
+                    Text(currentApp.version)
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Constants.Colors.primaryColor.opacity(0.2))
                         .cornerRadius(4)
 
-                    if app.installSize != nil {
-                        Text(app.formattedSize)
+                    if currentApp.installSize != nil {
+                        Text(currentApp.formattedSize)
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
 
-                    if let releaseDate = app.formattedReleaseDate {
+                    if let releaseDate = currentApp.formattedReleaseDate {
                         HStack(spacing: 2) {
                             Image(systemName: "calendar")
                                 .font(.caption2)
@@ -467,7 +487,7 @@ struct BrewAppRowView: View {
                         .foregroundColor(.secondary)
                     }
 
-                    if let installs = app.analytics?.install30Days {
+                    if let installs = currentApp.analytics?.install30Days {
                         HStack(spacing: 2) {
                             Image(systemName: "arrow.down.circle.fill")
                                 .font(.caption2)
@@ -483,25 +503,25 @@ struct BrewAppRowView: View {
 
             // Action Button
             Button(action: {
-                if app.isInstalled {
-                    viewModel.uninstallApp(app)
+                if currentApp.isInstalled {
+                    viewModel.uninstallApp(currentApp)
                 } else {
-                    viewModel.installApp(app)
+                    viewModel.installApp(currentApp)
                 }
             }) {
                 Label(
-                    app.isInstalled ? "Uninstall" : "Install",
-                    systemImage: app.isInstalled ? "trash" : "arrow.down.circle.fill"
+                    currentApp.isInstalled ? "Uninstall" : "Install",
+                    systemImage: currentApp.isInstalled ? "trash" : "arrow.down.circle.fill"
                 )
             }
             .buttonStyle(.borderedProminent)
-            .tint(app.isInstalled ? .red : Constants.Colors.primaryColor)
+            .tint(currentApp.isInstalled ? .red : Constants.Colors.primaryColor)
             .disabled(viewModel.isInstalling)
         }
         .padding()
         .background(
             Group {
-                if app.isInstalled {
+                if currentApp.isInstalled {
                     Color.green.opacity(0.05)
                 } else if isSelected {
                     Constants.Colors.primaryColor.opacity(0.15)
@@ -516,10 +536,10 @@ struct BrewAppRowView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
-                    app.isInstalled
+                    currentApp.isInstalled
                         ? Color.green.opacity(0.3)
                         : (isSelected ? Constants.Colors.primaryColor : Color.clear),
-                    lineWidth: app.isInstalled ? 1.5 : 2
+                    lineWidth: currentApp.isInstalled ? 1.5 : 2
                 )
                 .padding(.horizontal)
                 .padding(.vertical, 4)

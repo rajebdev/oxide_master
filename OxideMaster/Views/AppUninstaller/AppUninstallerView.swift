@@ -52,6 +52,12 @@ struct AppUninstallerView: View {
         .sheet(isPresented: $showingOrphaned) {
             OrphanedFilesView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showUninstallationLogs) {
+            UninstallationLogsView(
+                logs: viewModel.uninstallationLogs,
+                isCleaning: viewModel.isCleaning
+            )
+        }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
         } message: {

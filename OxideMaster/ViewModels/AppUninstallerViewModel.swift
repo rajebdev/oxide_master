@@ -15,6 +15,8 @@ class AppUninstallerViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var groupBySource = true
+    @Published var uninstallationLogs: [String] = []
+    @Published var showUninstallationLogs = false
 
     // Track first appearance for auto-scan
     @Published var hasPerformedInitialScan = false
@@ -151,8 +153,41 @@ class AppUninstallerViewModel: ObservableObject {
     ) async -> Bool {
         isCleaning = true
         errorMessage = nil
+        uninstallationLogs = []
+        showUninstallationLogs = true
+
+        addLog("🗑️ Starting uninstallation of \(app.name)...")
+        addLog("📦 Bundle: \(app.bundleIdentifier)")
+        addLog("📍 Location: \(app.appPath.path)")
+        addLog("")
+
+        if removeAppBundle {
+            addLog("✓ Will remove app bundle")
+        }
+        if removeRelatedFiles {
+            addLog("✓ Will remove related files")
+        }
+        if removeLoginItems {
+            addLog("✓ Will remove login items")
+        }
+        addLog("\(moveToTrash ? "Moving to Trash" : "Permanently deleting")")
+        addLog("")
 
         do {
+            addLog("🔍 Analyzing app components...")
+
+            if removeLoginItems && !app.loginItems.isEmpty {
+                addLog("🔧 Removing \(app.loginItems.count) login item(s)...")
+            }
+
+            if removeRelatedFiles {
+                let relatedCount = app.relatedFiles.count
+                addLog("📂 Found \(relatedCount) related file(s)...")
+            }
+
+            addLog("")
+            addLog("⚙️ Uninstalling...")
+
             try await service.uninstallApp(
                 app,
                 removeAppBundle: removeAppBundle,
@@ -161,11 +196,17 @@ class AppUninstallerViewModel: ObservableObject {
                 moveToTrash: moveToTrash
             )
 
+            addLog("")
+            addLog("✅ \(app.name) uninstalled successfully!")
+            addLog("💾 Freed up: \(app.totalSize.formatted(.byteCount(style: .file)))")
+
             // Remove from list
             apps.removeAll { $0.id == app.id }
             isCleaning = false
             return true
         } catch {
+            addLog("")
+            addLog("❌ Uninstallation failed: \(error.localizedDescription)")
             errorMessage = "Failed to uninstall \(app.name):\n\(error.localizedDescription)"
             showError = true
             isCleaning = false
@@ -173,13 +214,34 @@ class AppUninstallerViewModel: ObservableObject {
         }
     }
 
+    private func addLog(_ message: String) {
+        let timestamp = DateFormatter.localizedString(
+            from: Date(), dateStyle: .none, timeStyle: .medium)
+        uninstallationLogs.append("[\(timestamp)] \(message)")
+    }
+
     func cleanOrphanedFiles(_ orphaned: OrphanedFiles, moveToTrash: Bool = true) async {
         isCleaning = true
+        uninstallationLogs = []
+        showUninstallationLogs = true
+
+        addLog("🧹 Starting cleanup of orphaned files...")
+        addLog("📦 App: \(orphaned.appName)")
+        addLog("📂 Files: \(orphaned.files.count)")
+        addLog("💾 Total size: \(orphaned.totalSize.formatted(.byteCount(style: .file)))")
+        addLog("")
 
         do {
+            addLog("⚙️ Cleaning...")
             try await service.cleanOrphanedFiles(orphaned, moveToTrash: moveToTrash)
             orphanedFiles.removeAll { $0.id == orphaned.id }
+
+            addLog("")
+            addLog("✅ Orphaned files cleaned successfully!")
+            addLog("💾 Freed up: \(orphaned.totalSize.formatted(.byteCount(style: .file)))")
         } catch {
+            addLog("")
+            addLog("❌ Cleanup failed: \(error.localizedDescription)")
             print("Error cleaning orphaned files: \(error)")
         }
 
