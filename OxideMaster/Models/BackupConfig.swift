@@ -8,22 +8,34 @@
 import Foundation
 
 /// Configuration for backup operations
-struct BackupConfig: Codable {
+struct BackupConfig: Codable, Identifiable, Equatable {
+    let id: UUID
+    var name: String
     var sourcePath: String
     var destinationPath: String
     var ageFilterDays: Int
     var lastBackupDate: Date?
+    var createdDate: Date
+    var lastUsedDate: Date
 
     init(
+        id: UUID = UUID(),
+        name: String = "New Backup Config",
         sourcePath: String = "",
         destinationPath: String = "",
         ageFilterDays: Int = 7,
-        lastBackupDate: Date? = nil
+        lastBackupDate: Date? = nil,
+        createdDate: Date = Date(),
+        lastUsedDate: Date = Date()
     ) {
+        self.id = id
+        self.name = name
         self.sourcePath = sourcePath
         self.destinationPath = destinationPath
         self.ageFilterDays = ageFilterDays
         self.lastBackupDate = lastBackupDate
+        self.createdDate = createdDate
+        self.lastUsedDate = lastUsedDate
     }
 
     /// Check if configuration is valid
@@ -34,6 +46,10 @@ struct BackupConfig: Codable {
     /// Get cutoff date for filtering files
     var cutoffDate: Date {
         Calendar.current.date(byAdding: .day, value: -ageFilterDays, to: Date()) ?? Date()
+    }
+
+    static func == (lhs: BackupConfig, rhs: BackupConfig) -> Bool {
+        lhs.id == rhs.id
     }
 }
 

@@ -73,24 +73,105 @@ class BackupService {
     private let fileManager = FileManager.default
     private let userDefaults = UserDefaults.standard
 
-    private let configKey = "backupConfig"
+    private let configsKey = "backupConfigs"
+    private let lastConfigIdKey = "lastBackupConfigId"
     private let historyKey = "backupHistory"
+    private let maxConfigs = 10
 
-    /// Load saved backup configuration
-    func loadConfig() -> BackupConfig {
-        guard let data = userDefaults.data(forKey: configKey),
-            let config = try? JSONDecoder().decode(BackupConfig.self, from: data)
+    /// Load all saved backup configurations
+    func loadConfigs() -> [BackupConfig] {
+        guard let data = userDefaults.data(forKey: configsKey),
+            let configs = try? JSONDecoder().decode([BackupConfig].self, from: data)
         else {
-            return BackupConfig()
+            return []
         }
-        return config
+        return configs
+    }
+
+    /// Save all backup configurations
+    func saveConfigs(_ configs: [BackupConfig]) {
+        // Keep only last maxConfigs
+        let configsToSave = Array(configs.prefix(maxConfigs))
+        if let data = try? JSONEncoder().encode(configsToSave) {
+            userDefaults.set(data, forKey: configsKey)
+        }
+    }
+
+    /// Load saved backup configuration (for backwards compatibility)
+    func loadConfig() -> BackupConfig {
+        // Try to load last used config
+        if let lastId = userDefaults.string(forKey: lastConfigIdKey),
+            let uuid = UUID(uuidString: lastId)
+        {
+            let configs = loadConfigs()
+            if let config = configs.first(where: { $0.id == uuid }) {
+                return config
+            }
+        }
+
+        // Return first config or create new one
+        let configs = loadConfigs()
+        return configs.first ?? BackupConfig()
     }
 
     /// Save backup configuration
     func saveConfig(_ config: BackupConfig) {
-        if let data = try? JSONEncoder().encode(config) {
-            userDefaults.set(data, forKey: configKey)
+        var configs = loadConfigs()
+
+        // Update existing or add new
+        if let index = configs.firstIndex(where: { $0.id == config.id }) {
+            configs[index] = config
+        } else {
+            configs.insert(config, at: 0)
         }
+
+        saveConfigs(configs)
+        setLastUsedConfig(config.id)
+    }
+
+    /// Add a new backup configuration
+    func addConfig(_ config: BackupConfig) {
+        var configs = loadConfigs()
+        configs.insert(config, at: 0)
+        saveConfigs(configs)
+        setLastUsedConfig(config.id)
+    }
+
+    /// Delete a backup configuration
+    func deleteConfig(_ config: BackupConfig) {
+        var configs = loadConfigs()
+        configs.removeAll { $0.id == config.id }
+        saveConfigs(configs)
+
+        // Clear last used if it was deleted
+        if let lastId = userDefaults.string(forKey: lastConfigIdKey),
+            lastId == config.id.uuidString
+        {
+            userDefaults.removeObject(forKey: lastConfigIdKey)
+        }
+    }
+
+    /// Update last used configuration
+    func setLastUsedConfig(_ id: UUID) {
+        userDefaults.set(id.uuidString, forKey: lastConfigIdKey)
+
+        // Update lastUsedDate in config
+        var configs = loadConfigs()
+        if let index = configs.firstIndex(where: { $0.id == id }) {
+            configs[index].lastUsedDate = Date()
+            // Move to front
+            let updated = configs.remove(at: index)
+            configs.insert(updated, at: 0)
+            saveConfigs(configs)
+        }
+    }
+
+    /// Get last used config ID
+    func getLastUsedConfigId() -> UUID? {
+        guard let idString = userDefaults.string(forKey: lastConfigIdKey) else {
+            return nil
+        }
+        return UUID(uuidString: idString)
     }
 
     /// Load backup history

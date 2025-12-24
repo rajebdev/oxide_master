@@ -27,16 +27,17 @@ struct SyncSetupView: View {
             // Modal Container
             VStack(spacing: 0) {
                 // Header
-                HStack {
+                HStack(spacing: 10) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.title2)
+                        .font(.title3)
                         .foregroundColor(Constants.Colors.primaryColor)
                     Text("Setup File Synchronization")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(.title3)
+                        .fontWeight(.semibold)
                     Spacer()
                 }
-                .padding()
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
                 .background(Constants.Colors.cardBackgroundColor)
 
                 Divider()
@@ -46,12 +47,13 @@ struct SyncSetupView: View {
                     Button(action: {
                         selectedMode = .newSetup
                     }) {
-                        HStack {
+                        HStack(spacing: 8) {
                             Image(systemName: "folder.badge.plus")
                             Text("New Setup")
+                                .font(.body)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 14)
                         .background(
                             selectedMode == .newSetup ? Constants.Colors.primaryColor : Color.clear
                         )
@@ -63,20 +65,22 @@ struct SyncSetupView: View {
                     Button(action: {
                         selectedMode = .fromHistory
                     }) {
-                        HStack {
+                        HStack(spacing: 8) {
                             Image(systemName: "clock.arrow.circlepath")
                             Text("From History")
+                                .font(.body)
                             if !viewModel.sessions.isEmpty {
                                 Text("\(viewModel.sessions.count)")
                                     .font(.caption)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .fontWeight(.semibold)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
                                     .background(Color.secondary.opacity(0.3))
                                     .cornerRadius(10)
                             }
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
+                        .padding(.vertical, 14)
                         .background(
                             selectedMode == .fromHistory
                                 ? Constants.Colors.primaryColor : Color.clear
@@ -99,9 +103,9 @@ struct SyncSetupView: View {
                         historyView
                     }
                 }
-                .frame(maxHeight: 400)
+                .frame(maxHeight: 380)
             }
-            .frame(width: 600)
+            .frame(width: 580)
             .background(Constants.Colors.backgroundColor)
             .cornerRadius(12)
             .shadow(radius: 20)
@@ -111,15 +115,17 @@ struct SyncSetupView: View {
     private var newSetupView: some View {
         VStack(spacing: 20) {
             // Source Folder
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: "folder.fill")
+                        .font(.body)
                         .foregroundColor(Constants.Colors.primaryColor)
                     Text("Source Folder")
-                        .fontWeight(.semibold)
+                        .font(.body)
+                        .fontWeight(.medium)
                 }
 
-                HStack {
+                HStack(spacing: 12) {
                     TextField("No folder selected", text: $sourcePath)
                         .textFieldStyle(.roundedBorder)
                         .disabled(true)
@@ -127,28 +133,37 @@ struct SyncSetupView: View {
                     Button(action: {
                         selectSourceFolder()
                     }) {
-                        Image(systemName: "folder.badge.plus")
-                            .padding(8)
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder.badge.plus")
+                            Text("Browse")
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                 }
             }
+            .padding(16)
+            .background(Constants.Colors.cardBackgroundColor)
+            .cornerRadius(8)
 
             // Arrow
             Image(systemName: "arrow.down.circle.fill")
-                .font(.title)
-                .foregroundColor(.secondary)
+                .font(.title2)
+                .foregroundColor(.secondary.opacity(0.6))
 
             // Destination Folder
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: "folder.fill.badge.checkmark")
+                        .font(.body)
                         .foregroundColor(.green)
                     Text("Destination Folder")
-                        .fontWeight(.semibold)
+                        .font(.body)
+                        .fontWeight(.medium)
                 }
 
-                HStack {
+                HStack(spacing: 12) {
                     TextField("No folder selected", text: $destPath)
                         .textFieldStyle(.roundedBorder)
                         .disabled(true)
@@ -156,12 +171,22 @@ struct SyncSetupView: View {
                     Button(action: {
                         selectDestinationFolder()
                     }) {
-                        Image(systemName: "folder.badge.plus")
-                            .padding(8)
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder.badge.plus")
+                            Text("Browse")
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                 }
             }
+            .padding(16)
+            .background(Constants.Colors.cardBackgroundColor)
+            .cornerRadius(8)
+
+            Spacer()
+                .frame(height: 12)
 
             // Start Button
             Button(action: {
@@ -169,12 +194,13 @@ struct SyncSetupView: View {
                     await viewModel.startNewSession(leftPath: sourcePath, rightPath: destPath)
                 }
             }) {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "play.fill")
                     Text("Start Synchronization")
+                        .font(.body)
                 }
                 .frame(maxWidth: .infinity)
-                .padding()
+                .padding(.vertical, 13)
                 .background(
                     sourcePath.isEmpty || destPath.isEmpty
                         ? Color.gray : Constants.Colors.primaryColor
@@ -185,7 +211,7 @@ struct SyncSetupView: View {
             .disabled(sourcePath.isEmpty || destPath.isEmpty)
             .buttonStyle(.plain)
         }
-        .padding()
+        .padding(20)
     }
 
     // MARK: - Helper Methods
@@ -227,10 +253,13 @@ struct SyncSetupView: View {
             if viewModel.sessions.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "tray")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 44))
+                        .foregroundColor(.secondary.opacity(0.6))
                     Text("No sync history available")
                         .foregroundColor(.secondary)
+                    Text("Create a new sync to get started")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.8))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 60)
@@ -246,7 +275,7 @@ struct SyncSetupView: View {
                 }
             }
         }
-        .padding()
+        .padding(20)
     }
 }
 
@@ -257,11 +286,12 @@ struct SessionCard: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
                 // Paths
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "folder.fill")
+                        .font(.caption)
                         .foregroundColor(Constants.Colors.primaryColor)
                     Text(session.leftPanelPath)
                         .font(.caption)
@@ -270,11 +300,12 @@ struct SessionCard: View {
                 }
 
                 Image(systemName: "arrow.down")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundColor(.secondary)
 
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "folder.fill.badge.checkmark")
+                        .font(.caption)
                         .foregroundColor(.green)
                     Text(session.rightPanelPath)
                         .font(.caption)
@@ -286,38 +317,47 @@ struct SessionCard: View {
                 Text(session.lastUsedDate, style: .relative)
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .padding(.top, 4)
             }
 
             Spacer()
 
-            // Delete button (shows on hover)
-            if isHovering {
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
+            // Action buttons
+            VStack(spacing: 6) {
+                Button(action: onSelect) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.fill")
+                            .font(.caption)
+                        Text("Load")
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderedProminent)
+
+                if isHovering {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
-        .padding()
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(
-                    isHovering
-                        ? Constants.Colors.cardBackgroundColor : Constants.Colors.backgroundColor
-                )
+                .fill(Constants.Colors.cardBackgroundColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(
-                            isHovering ? Constants.Colors.primaryColor : Color.gray.opacity(0.3),
+                            isHovering ? Constants.Colors.primaryColor : Color.gray.opacity(0.2),
                             lineWidth: 1)
                 )
         )
         .onHover { hovering in
             isHovering = hovering
-        }
-        .onTapGesture {
-            onSelect()
         }
     }
 }

@@ -12,6 +12,7 @@ import SwiftUI
 @MainActor
 class BackupManagerViewModel: ObservableObject {
     @Published var config: BackupConfig
+    @Published var configs: [BackupConfig] = []
     @Published var isRunning = false
     @Published var isScanning = false
     @Published var progress: Double = 0.0
@@ -20,6 +21,7 @@ class BackupManagerViewModel: ObservableObject {
     @Published var history: [BackupRecord] = []
     @Published var lastBackupRecord: BackupRecord?
     @Published var previewResult: BackupPreviewResult?
+    @Published var showConfigSelector = false
 
     // Track first appearance for auto-scan
     @Published var hasPerformedInitialScan = false
@@ -27,8 +29,16 @@ class BackupManagerViewModel: ObservableObject {
     private let backupService = BackupService()
 
     init() {
+        self.configs = backupService.loadConfigs()
         self.config = backupService.loadConfig()
         self.history = backupService.loadHistory()
+
+        // If no configs exist, create default one
+        if configs.isEmpty {
+            self.config = BackupConfig()
+            configs.append(config)
+            backupService.saveConfig(config)
+        }
     }
 
     /// Update source path
@@ -49,9 +59,55 @@ class BackupManagerViewModel: ObservableObject {
         saveConfig()
     }
 
+    /// Update config name
+    func updateConfigName(_ name: String) {
+        config.name = name
+        saveConfig()
+    }
+
     /// Save configuration
     func saveConfig() {
         backupService.saveConfig(config)
+        configs = backupService.loadConfigs()
+    }
+
+    /// Load a specific configuration
+    func loadConfig(_ selectedConfig: BackupConfig) {
+        config = selectedConfig
+        backupService.setLastUsedConfig(selectedConfig.id)
+        configs = backupService.loadConfigs()
+        showConfigSelector = false
+
+        // Clear preview when switching configs
+        previewResult = nil
+        errorMessage = nil
+        statusMessage = ""
+    }
+
+    /// Create a new configuration
+    func createNewConfig(name: String) {
+        let newConfig = BackupConfig(name: name)
+        config = newConfig
+        backupService.addConfig(newConfig)
+        configs = backupService.loadConfigs()
+        showConfigSelector = false
+    }
+
+    /// Delete a configuration
+    func deleteConfig(_ configToDelete: BackupConfig) {
+        backupService.deleteConfig(configToDelete)
+        configs = backupService.loadConfigs()
+
+        // If deleted current config, load first available or create new
+        if config.id == configToDelete.id {
+            if let firstConfig = configs.first {
+                config = firstConfig
+            } else {
+                config = BackupConfig()
+                configs.append(config)
+                backupService.saveConfig(config)
+            }
+        }
     }
 
     /// Scan and preview files to be moved

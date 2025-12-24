@@ -71,6 +71,13 @@ class FileSyncViewModel: ObservableObject {
         let homeURL = FileManager.default.homeDirectoryForCurrentUser
         leftPanelPath = homeURL.path
         rightPanelPath = homeURL.path
+
+        // Auto-load last used session if exists
+        if let lastSession = sessions.first {
+            Task {
+                await loadSession(lastSession)
+            }
+        }
     }
 
     /// Load left panel
