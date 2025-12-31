@@ -95,11 +95,17 @@ enum Constants {
         static let warningColor = Color.orange
         static let infoColor = Color.blue
 
-        // UI colors
-        static let primaryColor = Color.orange
+        // UI colors - macOS 26 Liquid Glass style
+        static let primaryColor = Color(red: 0.25, green: 0.52, blue: 0.96) // Modern blue accent
         static let secondaryColor = Color.gray
         static let backgroundColor = Color(NSColor.windowBackgroundColor)
         static let cardBackgroundColor = Color(NSColor.controlBackgroundColor)
+        
+        // Liquid Glass colors
+        static let glassBackground = Color.white.opacity(0.05)
+        static let glassBorder = Color.white.opacity(0.1)
+        static let glassHover = Color.white.opacity(0.08)
+        static let glassSelected = Color.white.opacity(0.12)
     }
 
     // MARK: - Defaults

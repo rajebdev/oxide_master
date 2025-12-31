@@ -75,6 +75,12 @@ class PermissionHelper {
 
     /// Request notification permission
     static func requestNotificationPermission() {
+        // Check if running in a proper app bundle context
+        guard Bundle.main.bundleIdentifier != nil else {
+            print("[PermissionHelper] Skipping notification permission request - no bundle context")
+            return
+        }
+        
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) {
             granted, error in
             if let error = error {
@@ -91,6 +97,13 @@ class PermissionHelper {
 
     /// Check notification permission status
     static func checkNotificationPermission(completion: @escaping (Bool) -> Void) {
+        // Check if running in a proper app bundle context
+        guard Bundle.main.bundleIdentifier != nil else {
+            print("[PermissionHelper] Skipping notification check - no bundle context")
+            completion(false)
+            return
+        }
+        
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             completion(settings.authorizationStatus == .authorized)
         }
