@@ -25,11 +25,37 @@ class SchedulerService: ObservableObject {
 
     /// Setup notification delegate for handling user responses
     private func setupNotificationDelegate() {
+        // Check if running in a proper app bundle context
+        // UNUserNotificationCenter crashes when running via `swift run` without a bundle
+        guard canUseNotifications else {
+            print("[SchedulerService] Skipping notification setup - no bundle context (running via swift run?)")
+            return
+        }
+        
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) {
             granted, error in
             if let error = error {
                 print("Notification authorization error: \(error)")
             }
+        }
+    }
+    
+    /// Check if notifications can be used (requires proper bundle context)
+    private var canUseNotifications: Bool {
+        Bundle.main.bundleIdentifier != nil
+    }
+    
+    /// Safely send a notification, handling cases where bundle context is missing
+    private func safelySendNotification(_ request: UNNotificationRequest) async {
+        guard canUseNotifications else {
+            print("[SchedulerService] Notification skipped - no bundle context: \(request.content.title)")
+            return
+        }
+        
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            print("Failed to send notification: \(error)")
         }
     }
 
@@ -125,12 +151,8 @@ class SchedulerService: ObservableObject {
             trigger: nil
         )
 
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-            print("Confirmation notification sent: \(items.count) items, \(formattedSize)")
-        } catch {
-            print("Failed to send notification: \(error)")
-        }
+        await safelySendNotification(request)
+        print("Confirmation notification sent: \(items.count) items, \(formattedSize)")
     }
 
     /// Perform cleanup automatically
@@ -164,11 +186,7 @@ class SchedulerService: ObservableObject {
             trigger: nil
         )
 
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-        } catch {
-            print("Failed to send completion notification: \(error)")
-        }
+        await safelySendNotification(request)
     }
 
     /// Confirm and run pending cleanup (called from app when user opens from notification)

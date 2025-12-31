@@ -3,12 +3,14 @@
 //  OxideMaster
 //
 //  Created on 2025-12-17.
+//  Updated with proper macOS NavigationSplitView
 //
 
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab: Tab = .installer
+    @State private var selectedTab: Tab? = .installer
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     // Persisted ViewModels - survive tab switches
     @StateObject private var diskAnalyzerVM = DiskAnalyzerViewModel()
@@ -18,56 +20,115 @@ struct ContentView: View {
     @StateObject private var appUninstallerVM = AppUninstallerViewModel()
     @StateObject private var appInstallerVM = AppInstallerViewModel()
 
-    enum Tab {
-        case analyzer
-        case backup
-        case fileSync
-        case cache
-        case uninstaller
-        case installer
-        case about
+    enum Tab: String, CaseIterable, Identifiable {
+        case installer = "App Installer"
+        case uninstaller = "App Uninstaller"
+        case analyzer = "Disk Analyzer"
+        case cache = "Cache Manager"
+        case fileSync = "File Sync"
+        case backup = "Backup Manager"
+        case about = "About"
+        
+        var id: String { rawValue }
+        
+        var icon: String {
+            switch self {
+            case .installer: return "arrow.down.app.fill"
+            case .uninstaller: return "xmark.app.fill"
+            case .analyzer: return "externaldrive.fill"
+            case .cache: return "tray.fill"
+            case .fileSync: return "arrow.triangle.2.circlepath"
+            case .backup: return "clock.arrow.circlepath"
+            case .about: return "info.circle"
+            }
+        }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HeaderView()
-
-            Divider()
-
-            // Main content with sidebar
-            HStack(spacing: 0) {
-                // Sidebar
-                SidebarView(selectedTab: $selectedTab)
-
-                Divider()
-
-                // Content
-                Group {
-                    switch selectedTab {
-                    case .analyzer:
-                        DiskAnalyzerView(viewModel: diskAnalyzerVM)
-                    case .backup:
-                        BackupManagerView(viewModel: backupManagerVM)
-                    case .fileSync:
-                        FileSyncView(viewModel: fileSyncVM)
-                    case .cache:
-                        CacheManagerView(viewModel: cacheManagerVM)
-                    case .uninstaller:
-                        AppUninstallerView(viewModel: appUninstallerVM)
-                    case .installer:
-                        AppInstallerView(viewModel: appInstallerVM)
-                    case .about:
-                        AboutView()
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            // Sidebar with fixed About at bottom
+            List(selection: $selectedTab) {
+                ForEach([Tab.installer, .uninstaller, .analyzer, .cache, .fileSync, .backup], id: \.self) { tab in
+                    NavigationLink(value: tab) {
+                        Label(tab.rawValue, systemImage: tab.icon)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 250)
+            .safeAreaInset(edge: .bottom) {
+                // Fixed About button at bottom - clean, no border
+                Button {
+                    selectedTab = .about
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: Tab.about.icon)
+                            .foregroundColor(selectedTab == .about ? .accentColor : .secondary)
+                        Text(Tab.about.rawValue)
+                            .foregroundColor(selectedTab == .about ? .primary : .secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(selectedTab == .about ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+        } detail: {
+            // Content area
+            contentView
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+    
+    @ViewBuilder
+    private var contentView: some View {
+        switch selectedTab {
+        case .analyzer:
+            DiskAnalyzerView(viewModel: diskAnalyzerVM)
+        case .backup:
+            BackupManagerView(viewModel: backupManagerVM)
+        case .fileSync:
+            FileSyncView(viewModel: fileSyncVM)
+        case .cache:
+            CacheManagerView(viewModel: cacheManagerVM)
+        case .uninstaller:
+            AppUninstallerView(viewModel: appUninstallerVM)
+        case .installer:
+            AppInstallerView(viewModel: appInstallerVM)
+        case .about:
+            AboutView()
+        case .none:
+            Text("Select an item")
+                .foregroundColor(.secondary)
         }
     }
 }
 
-// MARK: - Header View
+// MARK: - Visual Effect View (NSVisualEffectView wrapper)
+
+struct VisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode
+    
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .followsWindowActiveState
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+    }
+}
+
+// MARK: - Header View (for other uses)
 
 struct HeaderView: View {
     var body: some View {
@@ -97,83 +158,31 @@ struct HeaderView: View {
             Spacer()
         }
         .padding()
-        .background(Constants.Colors.backgroundColor)
+        .background(.ultraThinMaterial)
     }
 }
 
-// MARK: - Sidebar
+// MARK: - Legacy Sidebar Components (kept for compatibility)
 
-struct SidebarView: View {
-    @Binding var selectedTab: ContentView.Tab
-
+struct LiquidGlassSidebar: View {
+    @Binding var selectedTab: ContentView.Tab?
+    @Environment(\.colorScheme) var colorScheme
+    
     var body: some View {
-        VStack(spacing: 0) {
-
-            SidebarButton(
-                title: "App Installer",
-                icon: "arrow.down.app.fill",
-                isSelected: selectedTab == .installer
-            ) {
-                selectedTab = .installer
+        List(selection: $selectedTab) {
+            ForEach([ContentView.Tab.installer, .uninstaller, .analyzer, .cache, .fileSync, .backup], id: \.self) { tab in
+                Label(tab.rawValue, systemImage: tab.icon)
+                    .tag(tab)
             }
-
-            SidebarButton(
-                title: "App Uninstaller",
-                icon: "xmark.app.fill",
-                isSelected: selectedTab == .uninstaller
-            ) {
-                selectedTab = .uninstaller
-            }
-            SidebarButton(
-                title: "Disk Analyzer",
-                icon: Constants.Icons.disk,
-                isSelected: selectedTab == .analyzer
-            ) {
-                selectedTab = .analyzer
-            }
-
-            SidebarButton(
-                title: "Cache Manager",
-                icon: Constants.Icons.cache,
-                isSelected: selectedTab == .cache
-            ) {
-                selectedTab = .cache
-            }
-
-            SidebarButton(
-                title: "File Sync",
-                icon: Constants.Icons.sync,
-                isSelected: selectedTab == .fileSync
-            ) {
-                selectedTab = .fileSync
-            }
-
-            SidebarButton(
-                title: "Backup Manager",
-                icon: Constants.Icons.backup,
-                isSelected: selectedTab == .backup
-            ) {
-                selectedTab = .backup
-            }
-
-            Spacer()
-
+            
             Divider()
-
-            SidebarButton(
-                title: "About",
-                icon: "info.circle",
-                isSelected: selectedTab == .about
-            ) {
-                selectedTab = .about
-            }
+            
+            Label(ContentView.Tab.about.rawValue, systemImage: ContentView.Tab.about.icon)
+                .tag(ContentView.Tab.about)
         }
-        .frame(width: 220)
-        .background(Constants.Colors.backgroundColor)
+        .listStyle(.sidebar)
     }
 }
-
-// MARK: - Sidebar Button
 
 struct SidebarButton: View {
     let title: String
@@ -183,25 +192,17 @@ struct SidebarButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .frame(width: 24)
-
-                Text(title)
-                    .font(.system(size: 13))
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Constants.Colors.primaryColor.opacity(0.1) : Color.clear)
-            .foregroundColor(isSelected ? Constants.Colors.primaryColor : .primary)
-            .contentShape(Rectangle())
+            Label(title, systemImage: icon)
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+    }
+}
+
+struct SidebarView: View {
+    @Binding var selectedTab: ContentView.Tab?
+
+    var body: some View {
+        LiquidGlassSidebar(selectedTab: $selectedTab)
     }
 }
 
