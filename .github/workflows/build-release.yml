@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload artifact (fallback)
         if: ${{ github.event_name != 'release' && !startsWith(github.ref, 'refs/tags/') }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: oxide-dmg
           path: ${{ steps.create_dmg.outputs.dmg }}
